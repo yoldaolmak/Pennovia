@@ -4,7 +4,18 @@ Date: 21 November 2026. Scope: Core, CLI, Studio, publishing boundaries and real
 
 **Decision: FULL PRODUCT ACCEPTANCE NOT GRANTED.** This is an evidence-based release decision, not an assertion that the existing software is unusable.
 
-## Latest exact-head checkpoint — final 21 November review
+## Latest exact-head checkpoint — 21 November, current
+
+- **Current main:** `c526dbbd9796f33b9c6873218eaef859acae57dd`. Its exact-head [postmerge CI #44915677159](https://github.com/yoldaolmak/Pennovia/actions/runs/44915677159) finished **6/6 successful**, including Python 3.10/3.11/3.12, Ruff, desktop/mobile Chromium, installed wheel, and container. Python 3.11 reported **362 passed, 2 skipped, 85.52% coverage**. There were **zero open PRs** at this checkpoint; main remains **unprotected**.
+- [PR #59](https://github.com/yoldaolmak/Pennovia/pull/59) merged direct CLI publication safety: known truncated/unknown local-model outputs and severe draft-integrity findings block `pennovia run --dest wordpress --publish` before a write; editable drafts and explicit reviewed-file publication remain possible. Its exact-head 6/6 and postmerge main checks passed.
+- [PR #61](https://github.com/yoldaolmak/Pennovia/pull/61) merged optional authenticated remote `verify_readback=True` checks for WordPress post ID/status/raw HTML and Drive ID/name/MIME/full media bytes. Readback mismatch and transport uncertainty never trigger a blind second write. These are **synthetic implementation proofs only**, not real nonproduction remote acceptance.
+- [PR #60](https://github.com/yoldaolmak/Pennovia/pull/60) merged a separate bounded user-supplied fact ledger across Core, CLI and Studio. Citation markers map to supplied URLs in exports; optional SSRF-safe HTTPS excerpt lookups can confirm *occurrence* only. No source field is trusted to prove factual truth or firsthand experience. Exact-head PR CI was **7/7 successful including real Ollama**, followed by successful main CI.
+- [Real model run #44914908407](https://github.com/yoldaolmak/Pennovia/actions/runs/44914908407) was successful as an experiment execution but **4/4 Pennovia-guided drafts were truncated at 640 tokens**, with an observed source-copy failure and a wrong-language Turkish output. **0/4 cases eligible** for style superiority. No independent blind qualified editor accepted any draft.
+- The public WordPress connection exposes **no staging/test environment** for authorized remote readback, and connected GitHub controls do not allow changing main's required-check protection. Thus neither #49 nor #46 can be marked accepted from these CI receipts.
+
+**Current decision: FULL PRODUCT ACCEPTANCE NOT GRANTED.** The software and the safety/provenance improvements have successful exact-head CI, but core author-voice superiority, coherent Turkish output, claim-level factual reliability, independent nonproduction remote outcomes and enforced branch rules are still unproven.
+
+## Earlier exact-head checkpoint (historical) — 21 November
 
 - Latest reviewed main: `24f756d3d567efcee882f2cd46ff681106b5aa76`, after PRs [#54](https://github.com/yoldaolmak/Pennovia/pull/54) (persistent runner caches and bounded real-model smoke), [#57](https://github.com/yoldaolmak/Pennovia/pull/57) (default-branch cache seeding), and [#56](https://github.com/yoldaolmak/Pennovia/pull/56) (actual Ollama completion receipts, Studio/CLI warning and comparable experiment).
 - Its [postmerge exact-head CI run #44909365422](https://github.com/yoldaolmak/Pennovia/actions/runs/44909365422) succeeded: all 6 jobs (Python 3.10/3.11/3.12 + Ruff, real Chromium Studio, wheel installation, container smoke); Python 3.11 reported **315 passed, 2 skipped, 84.36% coverage**. Static correctness passed. No open PR remained at this checkpoint.
@@ -55,11 +66,11 @@ Thus neither **2/2 English improvement**, nor **reliable Turkish drafting**, nor
 - Severe four-word-sequence looping fails review for a sufficiently long text when the source author profile does not itself exhibit an intentionally tiny vocabulary. Moderately formulaic output receives a visible review note. This structural screen is conservative and **cannot certify semantic coherence**.
 - Paired results now retain raw distances but cannot report a numeric win if either arm is too short, very uneven in length, in the wrong/unknown language, a severe repetition loop or an exact long-span copy.
 
-## Source-evidence ledger candidate (not product accepted)
+## Merged source-evidence ledger — factual accuracy still unaccepted
 
 A new optional, bounded source-fact packet has been introduced separately from the author-voice profile, with explicit `claim`, `source_url`, and `source_excerpt` fields, reference-token diagnostics and an opt-in public HTTPS excerpt match using the existing SSRF-safe reader. The underlying URLs and user-entered text are never silently considered verified; returned results explicitly mark claim truth and firsthand experience as **unverified**. Source facts remain lower-priority, untrusted model inputs. The CLI and Studio expose the packet without modifying VoiceProfile v1.
 
-This enables evidence-aware editorial preparation, not factual claim verification or unattended publication. A source excerpt being found does **not** prove that the generated claim is supported. The pilot's engineering and live-model checks, plus any independent real-source editorial test, must pass before expanding product acceptance. Keep issue #48 open until claim-level verification, actual remote proof and independent human checks exist.
+This enables evidence-aware editorial preparation, not factual claim verification or unattended publication. A source excerpt being found does **not** prove that the generated claim is supported. The feature's engineering and real-model regressions have passed. Real claim-to-source semantic verification and qualified independent editorial testing have **not** been performed and remain required before expanding product acceptance. Keep issue #48 open until claim-level verification, actual remote proof and independent human checks exist.
 
 ## Remaining hard acceptance conditions
 
@@ -68,6 +79,5 @@ This enables evidence-aware editorial preparation, not factual claim verificatio
 3. **Repository enforcement, #46:** main is not protected and no required exact-head checks/ruleset is configured. Existing CI is successful but advisory until governance changes are made.
 4. **Real remote exports, #49:** WordPress and Google Drive need authorized *non-production* creation/readback proof, including indeterminate-network-outcome tests. Mock tests cannot certify a remote write.
 5. **Generation completion and coherence, #52:** The objective model receipt and cutoff handling are merged; authentic testing proved 4/4 guided texts ended at the token limit. Independent semantic readability and natural Turkish still need credible evidence, with stronger permitted local modeling or an explicit feature limitation.
-5. **Completion and fluency, #52:** preserve real model finish metadata, detect token-limited fragments and independently evaluate semantic coherence and natural Turkish. A mechanically eligible style comparison cannot certify a complete or readable draft.
 
 **Release interpretation:** The author can inspect/edit drafts and must retain editorial authority. Neither an offline test run, a numeric style score, nor this limited local-model trial authorizes unattended publication or a full-product-quality claim.
