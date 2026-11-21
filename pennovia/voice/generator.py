@@ -144,7 +144,7 @@ def generate_openai(profile: VoiceProfile, content_type: str, topic: str,
 
 
 def generate_ollama(profile: VoiceProfile, content_type: str, topic: str,
-                    model: str = "llama3") -> str:
+                    model: str = "llama3", max_tokens: int | None = None) -> str:
     try:
         import requests
     except ImportError as exc:
@@ -159,6 +159,10 @@ def generate_ollama(profile: VoiceProfile, content_type: str, topic: str,
         ],
         "stream": False,
     }
+    if max_tokens is not None:
+        if type(max_tokens) is not int or not 64 <= max_tokens <= 8192:
+            raise ValueError("Ollama max_tokens must be an integer from 64 to 8192")
+        payload["options"] = {"num_predict": max_tokens}
     try:
         # Local writing samples must never be forwarded to an ambient HTTP
         # proxy or authenticated through a user's .netrc configuration.
