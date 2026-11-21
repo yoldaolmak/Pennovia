@@ -6,6 +6,9 @@ on:
       - .github/workflows/live-model-release.yml
       - validation/live_model.py
       - validation/paired_voice.py
+      - pennovia/voice/generator.py
+      - pennovia/content_types/registry.py
+      - tests/test_turkish_prompt.py
       - tests/test_paired_voice.py
       - tests/test_live_model_source_contract.py
       - release/v0.2.0-alpha.md
