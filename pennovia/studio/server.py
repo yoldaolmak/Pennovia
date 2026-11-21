@@ -162,7 +162,8 @@ def _generate_request(payload: dict, profile: VoiceProfile) -> dict:
         **({"return_metadata": True} if request_receipt else {}), **options
     )
     if isinstance(generated, OllamaGeneration):
-        review = _review(generated.text, profile, facts if packet else None)
+        review = (_review(generated.text, profile, facts) if packet
+                  else _review(generated.text, profile))
         if generated.completion_status != "complete":
             review["passed"] = False
             issue = ("generation_truncated" if generated.completion_status == "truncated"
@@ -174,7 +175,9 @@ def _generate_request(payload: dict, profile: VoiceProfile) -> dict:
             "generated_tokens": generated.generated_tokens,
             "prompt_tokens": generated.prompt_tokens,
         }}
-    return {"draft": generated, "review": _review(generated, profile, facts if packet else None)}
+    review = (_review(generated, profile, facts) if packet
+              else _review(generated, profile))
+    return {"draft": generated, "review": review}
 
 
 def _download_draft(draft: str, title: str, fmt: str) -> tuple[str, bytes, str]:
@@ -233,7 +236,9 @@ def _handle_api(path: str, payload: dict) -> dict | tuple[str, bytes, str]:
     draft = _required_string(payload, "draft", limit=1_000_000)
     if path == "/api/review":
         fact_packet = payload.get("fact_packet")
-        return _review(draft, profile, fact_packet if fact_packet not in (None, "") else None)
+        if fact_packet in (None, ""):
+            return _review(draft, profile)
+        return _review(draft, profile, fact_packet)
     return _export_request(payload, draft)
 
 
