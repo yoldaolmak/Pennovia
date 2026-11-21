@@ -45,7 +45,7 @@ jobs:
       - name: Validate bilingual public-domain benchmark sources before model download
         run: python validation/paired_voice.py --source-only --output "$RUNNER_TEMP/paired-voice-evidence"
       - name: Reuse verified local Ollama model blobs
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.ollama/models
           key: ${{ runner.os }}-pennovia-ollama-qwen25-15b-v1
