@@ -23,6 +23,8 @@ The first pre-budget real-model PR run `44907381175` failed with a genuine Ollam
 
 GitHub cache visibility is branch/ref scoped. Model caches first populated on a PR ref are **not automatically a shared default-branch warm cache**. After a qualifying main-branch live-model run (or an explicitly dispatched workflow), later PRs can reuse the relevant main cache. A cold-cache run must remain correct.
 
+To make this reliable without another runner, `.github/workflows/seed-model-cache.yml` runs **once when the workflow itself is added/changed on main**, or when explicitly dispatched against `main`. It uses the existing GitHub-hosted runner to install the Ollama CLI, pull or verify the exact `qwen2.5:1.5b` tag and seed the **same** versioned model cache key used by live-model PR jobs. It does not generate content, change any publication permissions, reduce product CI checks or assert model quality. Verify an actual cache hit in a subsequent PR before claiming model download savings. On cache-key changes, update this workflow and the live-model key together and re-prime main.
+
 ## Acceptance beyond CI
 
 - `main` still needs enforced required checks/branch protection: issue #46. GitHub's connected tool does not provide repository-admin mutation for that setting.
