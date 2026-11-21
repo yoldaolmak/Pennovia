@@ -58,7 +58,12 @@ def test_source_and_settings_changes_invalidate_profile_without_deleting_draft()
             "name": "profile.json", "mimeType": "application/json",
             "buffer": profile_bytes,
         })
-        page.get_by_text("Profile ready", exact=True).wait_for()
+        # "Profile ready" was already visible before the asynchronous
+        # import began. Wait for the *new* state, not the stale label.
+        page.wait_for_function(
+            "() => document.querySelectorAll('#source-list .source-item').length === 0 "
+            "&& document.querySelector('#profile-state').textContent === 'Profile ready'"
+        )
         assert page.locator("#source-list .source-item").count() == 0
         assert page.locator("#analyze").is_disabled()
         assert page.locator("#draft").input_value() == DRAFT
