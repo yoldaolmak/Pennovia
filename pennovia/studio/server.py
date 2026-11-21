@@ -125,7 +125,7 @@ def _validated_profile(payload: dict) -> VoiceProfile:
 
 
 def _generate_request(payload: dict, profile: VoiceProfile) -> dict:
-    from pennovia.voice.generator import generate
+    from pennovia.voice.generator import OllamaGeneration, generate
 
     topic = _required_string(payload, "topic", limit=500)
     kind = payload.get("content_type")
@@ -140,8 +140,25 @@ def _generate_request(payload: dict, profile: VoiceProfile) -> dict:
     if backend == "codex" and model.strip():
         raise ValueError("Codex CLI does not accept a model override")
     options = {"model": model.strip()} if model.strip() else {}
-    draft = generate(profile, kind, topic, backend=backend, **options)
-    return {"draft": draft, "review": _review(draft, profile)}
+    request_receipt = backend in ("ollama", "auto")
+    generated = generate(
+        profile, kind, topic, backend=backend,
+        **({"return_metadata": True} if request_receipt else {}), **options
+    )
+    if isinstance(generated, OllamaGeneration):
+        review = _review(generated.text, profile)
+        if generated.completion_status != "complete":
+            review["passed"] = False
+            issue = ("generation_truncated" if generated.completion_status == "truncated"
+                     else "generation_completion_unknown")
+            review["issues"].append(issue)
+        review["details"]["completion_status"] = generated.completion_status
+        return {"draft": generated.text, "review": review, "generation": {
+            "completion_status": generated.completion_status,
+            "generated_tokens": generated.generated_tokens,
+            "prompt_tokens": generated.prompt_tokens,
+        }}
+    return {"draft": generated, "review": _review(generated, profile)}
 
 
 def _download_draft(draft: str, title: str, fmt: str) -> tuple[str, bytes, str]:

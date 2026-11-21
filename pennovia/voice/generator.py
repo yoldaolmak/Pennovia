@@ -4,8 +4,47 @@ Supports: OpenAI API, Anthropic Claude, OpenRouter, local Ollama, Codex CLI
 """
 import os
 import subprocess
+from dataclasses import dataclass
 from .analyzer import VoiceProfile
 from ..content_types.registry import get as get_type
+
+
+@dataclass(frozen=True)
+class OllamaGeneration:
+    """Optional inference receipt; default generation API still returns str."""
+
+    text: str
+    completion_status: str  # complete | truncated | unknown
+    done_reason: str | None
+    prompt_tokens: int | None
+    generated_tokens: int | None
+
+
+def _ollama_receipt(payload: dict) -> OllamaGeneration:
+    """Reject invalid content, but never fabricate a model completion receipt."""
+    if not isinstance(payload, dict):
+        raise RuntimeError("Ollama returned an invalid response structure")
+    try:
+        text = _require_draft(payload["message"]["content"], "Ollama")
+    except (KeyError, TypeError) as exc:
+        raise RuntimeError("Ollama returned an invalid response structure") from exc
+    reason = payload.get("done_reason")
+    if not isinstance(reason, str) or reason not in ("stop", "length"):
+        reason = None
+    # Ollama must explicitly finish its nonstreaming response. A claimed
+    # stop reason without done=true is not evidence of a complete draft.
+    status = ({"stop": "complete", "length": "truncated"}.get(reason, "unknown")
+              if payload.get("done") is True else "unknown")
+
+    def token_count(name: str) -> int | None:
+        number = payload.get(name)
+        return number if type(number) is int and number >= 0 else None
+
+    return OllamaGeneration(
+        text=text, completion_status=status, done_reason=reason,
+        prompt_tokens=token_count("prompt_eval_count"),
+        generated_tokens=token_count("eval_count"),
+    )
 
 
 def _require_draft(content, backend: str) -> str:
@@ -144,12 +183,16 @@ def generate_openai(profile: VoiceProfile, content_type: str, topic: str,
 
 
 def generate_ollama(profile: VoiceProfile, content_type: str, topic: str,
-                    model: str = "llama3", max_tokens: int | None = None) -> str:
+                    model: str = "llama3", max_tokens: int | None = None,
+                    seed: int | None = None,
+                    return_metadata: bool = False) -> str | OllamaGeneration:
     try:
         import requests
     except ImportError as exc:
         raise RuntimeError("Ollama support requires: pip install requests") from exc
 
+    if type(return_metadata) is not bool:
+        raise ValueError("Ollama return_metadata must be boolean")
     system, user = _build_prompt(profile, content_type, topic)
     payload = {
         "model": model,
@@ -163,6 +206,10 @@ def generate_ollama(profile: VoiceProfile, content_type: str, topic: str,
         if type(max_tokens) is not int or not 64 <= max_tokens <= 8192:
             raise ValueError("Ollama max_tokens must be an integer from 64 to 8192")
         payload["options"] = {"num_predict": max_tokens}
+    if seed is not None:
+        if type(seed) is not int or not 0 <= seed <= 2_147_483_647:
+            raise ValueError("Ollama seed must be an integer from 0 to 2147483647")
+        payload.setdefault("options", {})["seed"] = seed
     try:
         # Local writing samples must never be forwarded to an ambient HTTP
         # proxy or authenticated through a user's .netrc configuration.
@@ -173,10 +220,10 @@ def generate_ollama(profile: VoiceProfile, content_type: str, topic: str,
     except requests.RequestException as exc:
         raise RuntimeError("Ollama request failed; check local service and model") from exc
     try:
-        content = resp.json()["message"]["content"]
-    except (ValueError, KeyError, TypeError) as exc:
+        result = _ollama_receipt(resp.json())
+    except ValueError as exc:
         raise RuntimeError("Ollama returned an invalid response structure") from exc
-    return _require_draft(content, "Ollama")
+    return result if return_metadata else result.text
 
 
 def generate_codex(profile: VoiceProfile, content_type: str, topic: str) -> str:
@@ -273,7 +320,8 @@ def generate_openrouter(profile: VoiceProfile, content_type: str, topic: str,
 
 
 def generate(profile: VoiceProfile, content_type: str, topic: str,
-             backend: str = "auto", **kwargs) -> str:
+             backend: str = "auto", return_metadata: bool = False,
+             **kwargs) -> str | OllamaGeneration:
     """
     backend: "auto" | "openai" | "anthropic" | "openrouter" | "ollama" | "codex"
     "auto" chooses one configured provider in priority order:
@@ -288,6 +336,10 @@ def generate(profile: VoiceProfile, content_type: str, topic: str,
         if os.environ.get("OPENAI_API_KEY"):
             return generate_openai(profile, content_type, topic, **kwargs)
         try:
+            if return_metadata:
+                return generate_ollama(
+                    profile, content_type, topic, return_metadata=True
+                )
             return generate_ollama(profile, content_type, topic)
         except RuntimeError as exc:
             raise RuntimeError(
@@ -300,6 +352,10 @@ def generate(profile: VoiceProfile, content_type: str, topic: str,
     elif backend == "openrouter":
         return generate_openrouter(profile, content_type, topic, **kwargs)
     elif backend == "ollama":
+        if return_metadata:
+            return generate_ollama(
+                profile, content_type, topic, return_metadata=True, **kwargs
+            )
         return generate_ollama(profile, content_type, topic, **kwargs)
     elif backend == "codex":
         return generate_codex(profile, content_type, topic)

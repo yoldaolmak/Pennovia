@@ -140,7 +140,7 @@ def cmd_analyze(args):
 
 def cmd_generate(args):
     from pennovia.voice.analyzer import VoiceProfile
-    from pennovia.voice.generator import generate
+    from pennovia.voice.generator import OllamaGeneration, generate
     from pennovia.audit import audit
     from pennovia.voice.scorer import score
     from pennovia.storage import write_private_text
@@ -157,20 +157,34 @@ def cmd_generate(args):
         kwargs = {}
         if getattr(args, "model", None):
             kwargs["model"] = args.model
-        content = generate(profile, args.type, args.topic, backend=args.backend, **kwargs)
+        generated = generate(
+            profile, args.type, args.topic,
+            backend=args.backend, return_metadata=True, **kwargs
+        )
     except RuntimeError as e:
         _fail(str(e))
+    content = generated.text if isinstance(generated, OllamaGeneration) else generated
+    completion = (generated.completion_status
+                  if isinstance(generated, OllamaGeneration) else None)
     _ok(f"{len(content.split()):,} words ({time.time()-t0:.0f}s)")
     _step(3, 3, "Auditing...")
     result = audit(content, profile)
     sim = score(content, profile)
-    _ok(f"Score: {result.total_score}/100 ({'PASS' if result.passed() else 'FAIL'}) | similarity: {sim:.2f}")
+    review_ok = result.passed() and completion in (None, "complete")
+    _ok(f"Score: {result.total_score}/100 ({'PASS' if review_ok else 'FAIL'}) | similarity: {sim:.2f}")
+    if completion == "truncated":
+        _warn("Ollama token budget reached. Draft is incomplete; edit before relying on it.")
+    elif completion == "unknown":
+        _warn("Ollama did not confirm generation completion; inspect the draft.")
     if result.issues:
         _warn(f"Issues: {', '.join(result.issues)}")
     write_private_text(out, content, overwrite=getattr(args, "overwrite", False))
     _ok(f"Saved: {out}")
     if getattr(args, "verbose", False):
-        print("\n" + result.report())
+        report = result.report()
+        if not review_ok and result.passed():
+            report = report.replace("[PASS]", "[FAIL: generation incomplete or unconfirmed]")
+        print("\n" + report)
 
 
 def _export_all(content, title, formats, destination, *, publish=False):

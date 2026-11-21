@@ -4,6 +4,7 @@ const $ = (id) => document.getElementById(id);
 const token = document.querySelector('meta[name="pennovia-token"]').content;
 const state = {
   sources: [], profile: null, draft: "", busy: false, review: null,
+  generationCompletion: null,
   sourceRevision: 0, profileRevision: 0, draftRevision: 0,
 };
 const buttons = ["analyze", "generate", "review", "download", "wordpress", "drive", "profile-save"];
@@ -259,14 +260,26 @@ function clearReview() {
 }
 
 function renderReview(review) {
+  // A second style review must not erase a known token-budget cutoff
+  // without the author's intervening text edit.
+  if (state.generationCompletion && state.generationCompletion !== "complete") {
+    const issue = state.generationCompletion === "truncated"
+      ? "generation_truncated" : "generation_completion_unknown";
+    review = { ...review, passed: false, issues: [...review.issues] };
+    if (!review.issues.includes(issue)) review.issues.push(issue);
+  }
   state.review = review;
   $("review-empty").hidden = true;
   $("review-results").hidden = false;
   $("review-score").textContent = String(review.score);
   $("score-fill").style.width = Math.max(0, Math.min(100, review.score)) + "%";
-  $("review-verdict").textContent = review.passed
-    ? "Above the heuristic threshold. Editorial review is still needed."
-    : "Needs review. This score is a style indicator, not a judgment of quality.";
+  $("review-verdict").textContent = review.issues.includes("generation_truncated")
+    ? "Model reached its token limit. The editable draft may be incomplete; finish it before relying on this review."
+    : review.issues.includes("generation_completion_unknown")
+      ? "The model did not confirm completion. Check and edit the draft before relying on this review."
+      : review.passed
+        ? "Above the heuristic threshold. Editorial review is still needed."
+        : "Needs review. This score is a style indicator, not a judgment of quality.";
   const details = $("review-components");
   details.replaceChildren();
   const max = { Voice: 40, Transitions: 20, Structure: 20, "No clichés": 20 };
@@ -290,6 +303,8 @@ $("draft").addEventListener("input", () => {
   const text = $("draft").value.trim();
   state.draftRevision++;
   state.draft = text;
+  // Once an author edits the draft, a fresh review concerns that edited text.
+  state.generationCompletion = null;
   $("draft-words").textContent = (text ? text.split(/\s+/).length : 0) + " words";
   clearReview();
   updateControls();
@@ -358,11 +373,18 @@ $("generate").addEventListener("click", () => {
   state.draftRevision++;
   $("draft-words").textContent = result.draft.trim().split(/\s+/).length + " words";
   state.draft = result.draft;
+  state.generationCompletion = result.generation?.completion_status || null;
   if (!$("export-title-input").value) $("export-title-input").value = $("topic").value.trim();
   renderReview(result.review);
   updateControls();
   $("draft").scrollIntoView({ behavior: "smooth", block: "center" });
-  notify("Draft ready for your editorial review.", "success");
+  notify(state.generationCompletion === "truncated"
+    ? "Model stopped at its token limit. Draft saved for editing, not accepted as complete."
+    : state.generationCompletion === "unknown"
+      ? "Model completion could not be confirmed. Check the editable draft."
+      : "Draft ready for your editorial review.",
+    state.generationCompletion === "truncated" || state.generationCompletion === "unknown"
+      ? "info" : "success");
   });
 });
 $("review").addEventListener("click", () => perform(async () => {

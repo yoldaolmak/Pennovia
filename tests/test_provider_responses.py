@@ -181,3 +181,141 @@ def test_ollama_optional_token_budget_is_bounded_and_sent_to_local_model(monkeyp
     result = generator.generate_ollama(PROFILE, "story", "Topic", max_tokens=640)
     assert result == "A complete local draft."
 
+    for invalid in (-1, 2_147_483_648, True, "23", 3.5):
+        with pytest.raises(ValueError, match="seed"):
+            generator.generate_ollama(PROFILE, "story", "Topic", seed=invalid)
+
+
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [("stop", "complete"), ("length", "truncated"), (None, "unknown"),
+     ("invalid", "unknown"), (37, "unknown")],
+)
+def test_ollama_optional_receipt_preserves_generation_completion(monkeypatch, reason, expected):
+    class FakeRequestError(Exception):
+        pass
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "message": {"content": "  An editable draft that can be kept.  "},
+                "done": True,
+                "done_reason": reason,
+                "prompt_eval_count": 250,
+                "eval_count": 640,
+            }
+
+    _mock_ollama_session(monkeypatch, Response, FakeRequestError)
+    # Existing public API still returns only a text draft.
+    assert generator.generate_ollama(PROFILE, "story", "Topic") == (
+        "An editable draft that can be kept."
+    )
+    receipt = generator.generate_ollama(
+        PROFILE, "story", "Topic", return_metadata=True
+    )
+    assert isinstance(receipt, generator.OllamaGeneration)
+    assert receipt.text == "An editable draft that can be kept."
+    assert receipt.completion_status == expected
+    assert receipt.done_reason == (reason if reason in ("stop", "length") else None)
+    assert receipt.prompt_tokens == 250
+    assert receipt.generated_tokens == 640
+
+
+def test_ollama_untrusted_token_usage_never_creates_fake_counts():
+    result = generator._ollama_receipt({
+        "message": {"content": "Draft"},
+        "done": True,
+        "done_reason": "stop",
+        "prompt_eval_count": True,
+        "eval_count": "500",
+    })
+    assert result.completion_status == "complete"
+    assert result.prompt_tokens is None
+    assert result.generated_tokens is None
+    with pytest.raises(RuntimeError, match="invalid response"):
+        generator._ollama_receipt(None)
+    with pytest.raises(RuntimeError, match="invalid response"):
+        generator._ollama_receipt({"message": []})
+
+
+def test_auto_local_metadata_and_cloud_backwards_compatibility(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    calls = []
+    def local(*args, **kwargs):
+        calls.append(kwargs)
+        if kwargs.get("return_metadata"):
+            return generator.OllamaGeneration("Draft", "truncated", "length", 100, 64)
+        return "Draft"
+
+    monkeypatch.setattr(generator, "generate_ollama", local)
+    assert generator.generate(PROFILE, "story", "Topic", backend="auto") == "Draft"
+    receipt = generator.generate(
+        PROFILE, "story", "Topic", backend="auto", return_metadata=True
+    )
+    assert receipt.completion_status == "truncated"
+    assert calls == [{}, {"return_metadata": True}]
+
+
+def test_ollama_does_not_certify_done_reason_without_true_done_flag():
+    receipt = generator._ollama_receipt({
+        "message": {"content": "Text"},
+        "done_reason": "stop",
+        "eval_count": 12,
+    })
+    assert receipt.completion_status == "unknown"
+    receipt = generator._ollama_receipt({
+        "message": {"content": "Text"},
+        "done": False,
+        "done_reason": "stop",
+    })
+    assert receipt.completion_status == "unknown"
+    assert receipt.done_reason == "stop"
+
+
+def test_valid_local_seed_is_sent_only_to_ollama_request(monkeypatch):
+    class FakeRequestError(Exception):
+        pass
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"message": {"content": "Seeded draft."}, "done": True,
+                    "done_reason": "stop"}
+
+    def response_with_seed():
+        return Response()
+
+    def session_factory():
+        class Session:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def post(self, url, **kwargs):
+                assert not self.trust_env
+                assert kwargs["json"]["options"] == {
+                    "num_predict": 640, "seed": 123456
+                }
+                return response_with_seed()
+        return Session()
+
+    monkeypatch.setitem(
+        sys.modules, "requests",
+        SimpleNamespace(Session=session_factory, RequestException=FakeRequestError),
+    )
+    receipt = generator.generate_ollama(
+        PROFILE, "story", "Topic", max_tokens=640, seed=123456,
+        return_metadata=True,
+    )
+    assert receipt.completion_status == "complete"
