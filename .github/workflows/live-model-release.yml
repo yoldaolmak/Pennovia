@@ -36,12 +36,19 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install Pennovia
         run: python -m pip install -e .
       - name: Check authenticated book and chapter split before model download
         run: python validation/live_model.py --source-only --output "$RUNNER_TEMP/real-model-evidence"
       - name: Validate bilingual public-domain benchmark sources before model download
         run: python validation/paired_voice.py --source-only --output "$RUNNER_TEMP/paired-voice-evidence"
+      - name: Reuse verified local Ollama model blobs
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama/models
+          key: ${{ runner.os }}-pennovia-ollama-qwen25-15b-v1
       - name: Install and launch local Ollama
         run: |
           set -euo pipefail
@@ -54,7 +61,10 @@ jobs:
             sleep 2
           done
           curl -fsS http://127.0.0.1:11434/api/tags > /dev/null
-          ollama pull qwen2.5:1.5b
+          if ! ollama list | grep -Eq '^qwen2[.]5:1[.]5b[[:space:]]'; then
+            ollama pull qwen2.5:1.5b
+          fi
+          ollama show qwen2.5:1.5b > /dev/null
       - name: Generate with actual model and compare withheld prose
         run: python validation/live_model.py --output "$RUNNER_TEMP/real-model-evidence"
       - name: Run bilingual paired author-voice comparison with local model
@@ -91,6 +101,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Check immutable version and source
         run: |
           python - <<'PY'
