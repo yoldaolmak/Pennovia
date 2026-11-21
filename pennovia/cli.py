@@ -227,7 +227,9 @@ def cmd_generate(args):
     if result.issues:
         _warn(f"Issues: {', '.join(result.issues)}")
     _warn_fact_review(fact_packet, content)
-    write_private_text(out, content, overwrite=getattr(args, "overwrite", False))
+    exported_content = (fact_packet.append_source_notes(content)
+                        if fact_packet else content)
+    write_private_text(out, exported_content, overwrite=getattr(args, "overwrite", False))
     _ok(f"Saved: {out}")
     if getattr(args, "verbose", False):
         report = result.report()
@@ -378,7 +380,10 @@ def cmd_run(args):
         profile.save(args.save_profile, overwrite=getattr(args, "overwrite", False))
         _ok(f"Profile: {args.save_profile}")
     _step(5, STEPS, "Exporting...")
-    _export_all(content, args.topic, fmts, dest, publish=getattr(args, "publish", False))
+    exported_content = (fact_packet.append_source_notes(content)
+                        if fact_packet else content)
+    _export_all(exported_content, args.topic, fmts, dest,
+                publish=getattr(args, "publish", False))
     print(f"\nDone. Score: {result.total_score}/100 | {len(content.split()):,} words")
 
 
