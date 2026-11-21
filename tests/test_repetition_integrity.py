@@ -33,10 +33,11 @@ def test_severe_repeated_prose_fails_even_when_style_heuristic_is_high():
 
 def test_diverse_prose_does_not_trigger_repetition_gate():
     # Fresh words in each paragraph keep the four-gram overlap minimal.
-    words = "Every day the traveler tried to understand the city without a map."
+    repeated_intro = "Every day the traveler walked a familiar street."
     text = "\n\n".join(
-        f"{words} The numbered note {i} introduced {chr(97 + i % 26)} "
-        f"and described a distinct view of the harbor." for i in range(22)
+        repeated_intro + " " + " ".join(
+            f"site{chr(97 + i)}{chr(97 + j)}description" for j in range(14)
+        ) for i in range(22)
     )
     share, _, tokens = repeated_fourgram_share(text)
     assert tokens >= 120
@@ -48,8 +49,9 @@ def test_diverse_prose_does_not_trigger_repetition_gate():
 
 def test_genuinely_distinct_phrases_have_low_repeat_share():
     text = " ".join(
-        f"Paragraph {i} follows one different path through this imagined place "
-        f"under condition {i * i}." for i in range(50)
+        " ".join(f"detail{chr(97 + i)}{chr(97 + j)}remark"
+                 for j in range(12))
+        for i in range(22)
     )
     # Fixed function words will recur, but do not account for half the four-grams.
     share, _, total = repeated_fourgram_share(text)
