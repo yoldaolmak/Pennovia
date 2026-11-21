@@ -14,6 +14,8 @@ Offline tests use synthetic responses. They verify adapter behavior, **not** liv
 
 The separate [Live Model & Alpha Release](../.github/workflows/live-model-release.yml) workflow runs an **actual local Ollama model**, without provider keys. It downloads original chapters of Mark Twain's [*The Innocents Abroad*](https://www.gutenberg.org/ebooks/3176), builds a profile from chapters I, II and IV, and holds out chapter III. It generates two drafts through Pennovia plus an independent neutral control using the same model; the report includes source hash, model digest, word counts, heuristic results and real TXT/HTML/PDF exports.
 
+The historical three-call travel-guide smoke trial now uses the same finite 900-token decoding budget for both profile-guided and neutral arms, because unbounded CPU-only generations sometimes hit the 300-second transport timeout. The recorded outputs may be incomplete-length article fragments; this is deliberately **not** a full-length travel-guide or quality acceptance test. It still runs the real model, exporters and provider adaptation. The separate paired bilingual trial retains its own matched 640-token budget and acceptance limitations.
+
 The workflow stores the exact drafts and report as downloadable GitHub Actions artifacts. No claim of calibrated voice fidelity or factual correctness follows from this limited case. The bundled demo corpus is illustrative and is **not** used as an authenticated Twain sample in this experiment.
 
 ### Published v0.2.0 evidence

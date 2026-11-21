@@ -22,6 +22,7 @@ from pennovia.voice.scorer import score
 SOURCE = "https://www.gutenberg.org/cache/epub/3176/pg3176.txt"
 MIRROR = "https://raw.githubusercontent.com/GITenberg/The-Innocents-Abroad_3176/master/3176-0.txt"
 MODEL = "qwen2.5:1.5b"
+MAX_PREDICT_TOKENS = 900  # same finite budget in styled and neutral smoke arms
 OLLAMA = "http://127.0.0.1:11434"
 TOPICS = (
     "A practical guide to arriving in an unfamiliar seaside town",
@@ -101,22 +102,25 @@ def _model_digest() -> str:
 
 def _baseline(topic: str) -> str:
     """Same real model, no Pennovia style profile: illustrative control."""
-    response = requests.post(
-        f"{OLLAMA}/api/chat",
-        json={
-            "model": MODEL,
-            "messages": [
-                {"role": "system", "content": (
-                    "Write an informative travel article with clear paragraphs. "
-                    "Avoid invented personal visits, precise unsupported facts, "
-                    "and fabricated quotations. Do not imitate an author."
-                )},
-                {"role": "user", "content": topic},
-            ],
-            "stream": False,
-        },
-        timeout=300,
-    )
+    with requests.Session() as session:
+        session.trust_env = False
+        response = session.post(
+            f"{OLLAMA}/api/chat",
+            json={
+                "model": MODEL,
+                "messages": [
+                    {"role": "system", "content": (
+                        "Write an informative travel article with clear paragraphs. "
+                        "Avoid invented personal visits, precise unsupported facts, "
+                        "and fabricated quotations. Do not imitate an author."
+                    )},
+                    {"role": "user", "content": topic},
+                ],
+                "stream": False,
+                "options": {"num_predict": MAX_PREDICT_TOKENS},
+            },
+            timeout=300,
+        )
     response.raise_for_status()
     text = response.json()["message"]["content"].strip()
     if len(text.split()) < 50:
@@ -161,7 +165,7 @@ def main() -> None:
     for index, topic in enumerate(TOPICS, 1):
         # The actual Pennovia model adapter calls the local Ollama service.
         text = generate(profile, "travel_guide", topic, backend="ollama",
-                        model=MODEL)
+                        model=MODEL, max_tokens=MAX_PREDICT_TOKENS)
         if len(text.split()) < 50:
             raise RuntimeError(f"Live-model draft #{index} is too short")
         filename = out / f"styled-{index}.txt"
@@ -203,6 +207,7 @@ def main() -> None:
         "model": MODEL,
         "model_digest": model_digest,
         "actual_model_calls": 3,
+        "max_predict_tokens_per_call": MAX_PREDICT_TOKENS,
         "styled_drafts": drafts,
         "neutral_control": {
             "file": "neutral-control.txt",
@@ -212,9 +217,10 @@ def main() -> None:
         },
         "exports": exports,
         "interpretation": (
-            "Single source book, one small language model, two styled drafts "
-            "and one neutral control. These are descriptive observations, "
-            "not calibrated voice fidelity or evidence of editorial quality."
+            "Single source book, one small language model, two bounded styled "
+            "drafts and one bounded neutral control with the same token budget. "
+            "These are smoke-test observations, not evidence of complete-length "
+            "travel guides, calibrated voice fidelity or editorial quality."
         ),
     }
     _write_json(out / "evidence.json", report)
