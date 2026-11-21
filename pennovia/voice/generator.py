@@ -312,7 +312,8 @@ def generate_openrouter(profile: VoiceProfile, content_type: str, topic: str,
 
 
 def generate(profile: VoiceProfile, content_type: str, topic: str,
-             backend: str = "auto", **kwargs) -> str:
+             backend: str = "auto", return_metadata: bool = False,
+             **kwargs) -> str | OllamaGeneration:
     """
     backend: "auto" | "openai" | "anthropic" | "openrouter" | "ollama" | "codex"
     "auto" chooses one configured provider in priority order:
@@ -327,6 +328,10 @@ def generate(profile: VoiceProfile, content_type: str, topic: str,
         if os.environ.get("OPENAI_API_KEY"):
             return generate_openai(profile, content_type, topic, **kwargs)
         try:
+            if return_metadata:
+                return generate_ollama(
+                    profile, content_type, topic, return_metadata=True
+                )
             return generate_ollama(profile, content_type, topic)
         except RuntimeError as exc:
             raise RuntimeError(
@@ -339,6 +344,10 @@ def generate(profile: VoiceProfile, content_type: str, topic: str,
     elif backend == "openrouter":
         return generate_openrouter(profile, content_type, topic, **kwargs)
     elif backend == "ollama":
+        if return_metadata:
+            return generate_ollama(
+                profile, content_type, topic, return_metadata=True, **kwargs
+            )
         return generate_ollama(profile, content_type, topic, **kwargs)
     elif backend == "codex":
         return generate_codex(profile, content_type, topic)
