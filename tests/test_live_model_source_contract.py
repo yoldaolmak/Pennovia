@@ -74,3 +74,32 @@ def test_gutenberg_mirror_fallback_is_source_verified_and_attributed(monkeypatch
     assert urls == [live_model.SOURCE, live_model.MIRROR]
     assert set(live_model.select_chapters(text)) == {"I", "II", "III", "IV"}
 
+
+
+def test_bounded_real_model_control_uses_direct_loopback_and_token_limit(monkeypatch):
+    from types import SimpleNamespace
+    from validation import live_model
+
+    class Session:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def post(self, url, **kwargs):
+            assert self.trust_env is False
+            assert url == live_model.OLLAMA + "/api/chat"
+            assert kwargs["json"]["model"] == live_model.MODEL
+            assert kwargs["json"]["options"] == {
+                "num_predict": live_model.MAX_PREDICT_TOKENS
+            }
+            assert kwargs["json"]["stream"] is False
+            return SimpleNamespace(
+                raise_for_status=lambda: None,
+                json=lambda: {"message": {"content": "A neutral sentence. " * 55}},
+            )
+
+    monkeypatch.setattr(live_model.requests, "Session", Session)
+    assert len(live_model._baseline("A topic").split()) >= 50
+    assert 64 <= live_model.MAX_PREDICT_TOKENS <= 8192
