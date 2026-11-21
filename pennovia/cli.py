@@ -138,6 +138,34 @@ def cmd_analyze(args):
     _ok(f"Profile saved: {out}  ({time.time()-t0:.1f}s)")
 
 
+def _load_fact_packet(path):
+    """Read a bounded explicit source packet, never a voice/corpus document."""
+    if not path:
+        return None, None
+    from pennovia.voice.facts import FactPacket
+
+    selected = Path(path)
+    if selected.stat().st_size > 18_000:
+        raise ValueError("Fact packet is too large")
+    raw = selected.read_text(encoding="utf-8")
+    return raw, FactPacket.from_data(raw)
+
+
+def _warn_fact_review(packet, content):
+    if packet is None:
+        return
+    result = packet.review_references(content)
+    _warn(
+        f"Factual evidence leads: {result['supplied']} supplied, "
+        f"{len(result['cited_ids'])} cited; neither sources nor claims verified."
+    )
+    if result["unknown_ids"]:
+        _warn("Unknown factual citations: " + ", ".join(result["unknown_ids"]))
+    if result["uncited_ids"]:
+        _warn("Uncited fact leads: " + ", ".join(result["uncited_ids"]))
+    _warn("Independent factual and firsthand-claim editorial review is required.")
+
+
 def cmd_generate(args):
     from pennovia.voice.analyzer import VoiceProfile
     from pennovia.voice.generator import OllamaGeneration, generate
@@ -153,10 +181,13 @@ def cmd_generate(args):
     _ok(f"{profile.author_name} — {profile.text_count} texts, {profile.total_words:,} words")
     _step(2, 3, f"Generating '{args.topic}' ({args.type}) via {args.backend}...")
     t0 = time.time()
+    fact_raw, fact_packet = _load_fact_packet(getattr(args, "facts_file", None))
     try:
         kwargs = {}
         if getattr(args, "model", None):
             kwargs["model"] = args.model
+        if getattr(args, "facts_file", None):
+            kwargs["fact_packet"] = fact_raw
         generated = generate(
             profile, args.type, args.topic,
             backend=args.backend, return_metadata=True, **kwargs
@@ -178,6 +209,7 @@ def cmd_generate(args):
         _warn("Ollama did not confirm generation completion; inspect the draft.")
     if result.issues:
         _warn(f"Issues: {', '.join(result.issues)}")
+    _warn_fact_review(fact_packet, content)
     write_private_text(out, content, overwrite=getattr(args, "overwrite", False))
     _ok(f"Saved: {out}")
     if getattr(args, "verbose", False):
@@ -286,10 +318,13 @@ def cmd_run(args):
     _ok(profile.summary().split("\n")[0])
     _step(3, STEPS, f"Generating '{args.topic}' ({args.type or 'travel_blog'}) via {args.backend or 'auto'}...")
     t0 = time.time()
+    fact_raw, fact_packet = _load_fact_packet(getattr(args, "facts_file", None))
     try:
         kwargs = {}
         if getattr(args, "model", None):
             kwargs["model"] = args.model
+        if getattr(args, "facts_file", None):
+            kwargs["fact_packet"] = fact_raw
         generation = generate(
             profile, args.type or "travel_blog", args.topic,
             backend=args.backend or "auto", return_metadata=True, **kwargs
@@ -311,6 +346,7 @@ def cmd_run(args):
         _warn("Ollama completion unconfirmed: editorial review required.")
     if result.issues:
         _warn(f"Issues: {', '.join(result.issues)}")
+    _warn_fact_review(fact_packet, content)
     try:
         _publication_preflight(
             publish=getattr(args, "publish", False),
@@ -367,6 +403,7 @@ def main():
     p_g.add_argument("--backend", default=os.environ.get("PENNOVIA_BACKEND", "auto"),
                      choices=["auto","openai","anthropic","openrouter","ollama","codex"])
     p_g.add_argument("--model", help="Override model (e.g. gpt-4o, claude-opus-4-8)")
+    p_g.add_argument("--facts-file", help="Optional JSON with explicitly supplied source facts")
     p_g.add_argument("--out", default="output.txt")
     p_g.add_argument("--overwrite", action="store_true", help="Replace existing draft output")
     p_g.add_argument("--verbose", action="store_true")
@@ -394,6 +431,7 @@ def main():
     p_r.add_argument("--backend", default=os.environ.get("PENNOVIA_BACKEND", "auto"),
                      choices=["auto","openai","anthropic","openrouter","ollama","codex"])
     p_r.add_argument("--model")
+    p_r.add_argument("--facts-file", help="Optional JSON with explicitly supplied source facts")
     p_r.add_argument("--format", default=None,
                      help="html, pdf, txt; defaults to html,txt locally or html for WordPress")
     p_r.add_argument("--dest", default="downloads",
