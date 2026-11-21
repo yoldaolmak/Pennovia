@@ -139,7 +139,8 @@ def load_cases() -> list[Case]:
 
 
 def _neutral(topic: str, language: str,
-             return_metadata: bool = False) -> str | OllamaGeneration:
+             return_metadata: bool = False,
+             seed: int | None = None) -> str | OllamaGeneration:
     """Match the content-type structure, topic and model, without style metrics."""
     ctype = get_type("story")
     structure = "; ".join(ctype["structure"])
@@ -151,6 +152,9 @@ def _neutral(topic: str, language: str,
         "from real people, concrete dates, or verified firsthand encounters. "
         "Follow the user's 180-260 word target rather than padding."
     )
+    options = {"num_predict": MAX_TOKENS}
+    if seed is not None:
+        options["seed"] = seed
     with requests.Session() as session:
         session.trust_env = False
         response = session.post(
@@ -159,7 +163,7 @@ def _neutral(topic: str, language: str,
                     {"role": "system", "content": system},
                     {"role": "user", "content": topic},
                 ], "stream": False,
-                "options": {"num_predict": MAX_TOKENS},
+                "options": options,
             }, timeout=300,
         )
         response.raise_for_status()
@@ -301,11 +305,17 @@ def main() -> None:
         profile = analyze(case.training, author_name=case.author, language=case.language)
         for index, topic in enumerate(TOPICS[case.language], 1):
             paired_id = f"{case.identifier}-{index}"
+            # Same model, decoding budget and deterministic seed for both
+            # arms. This improves trial reproducibility, not prose quality.
+            seed = int(hashlib.sha256(paired_id.encode()).hexdigest()[:7], 16)
             styled_response = generate(
                 profile, "story", topic, backend="ollama",
-                model=MODEL, max_tokens=MAX_TOKENS, return_metadata=True,
+                model=MODEL, max_tokens=MAX_TOKENS, seed=seed,
+                return_metadata=True,
             )
-            neutral_response = _neutral(topic, case.language, return_metadata=True)
+            neutral_response = _neutral(
+                topic, case.language, return_metadata=True, seed=seed
+            )
             if not isinstance(styled_response, OllamaGeneration):
                 raise RuntimeError("Styled Ollama response is missing its receipt")
             if not isinstance(neutral_response, OllamaGeneration):
@@ -316,6 +326,7 @@ def main() -> None:
                 styled_completion=styled_response.completion_status,
                 neutral_completion=neutral_response.completion_status,
             )
+            metrics["shared_ollama_seed"] = seed
             metrics["styled_generated_tokens"] = styled_response.generated_tokens
             metrics["neutral_generated_tokens"] = neutral_response.generated_tokens
             metrics["styled_prompt_tokens"] = styled_response.prompt_tokens
