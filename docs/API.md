@@ -90,6 +90,37 @@ A local Ollama call can also accept an optional bounded integer `seed` (0–2147
 
 `auto` selects Anthropic → OpenRouter → OpenAI → Ollama based on configured credentials. CLI supports `PENNOVIA_BACKEND`; Studio defaults to local Ollama. A `model` override must match the provider; Codex CLI does not accept one. `max_tokens` is an optional Python API override for local Ollama only; omitted values preserve existing model defaults. It is used by controlled comparisons to give each arm the same finite decoding budget.
 
+## Explicit factual-source evidence (optional)
+
+VoiceProfile only describes *writing style*. It never authorizes Pennovia to assert that the writer visited a place or that a route, timetable, price or quote is true.
+
+Pass separately supplied **source leads** into the shared generator without changing VoiceProfile v1:
+
+```python
+from pennovia.voice.facts import FactPacket
+from pennovia.voice.generator import generate
+
+facts = {
+    "facts": [{
+        "claim": "A hypothetical ferry connection is described in this source.",
+        "source_url": "https://example.org/guide",
+        "source_excerpt": "This example excerpt must be replaced by actual source prose."
+    }]
+}
+packet = FactPacket.from_data(facts)
+draft = generate(profile, "travel_guide", "Describe the fictional port",
+                 backend="ollama", fact_packet=facts)
+reference_review = packet.review_references(draft)
+# supplied / cited_ids / uncited_ids / unknown_ids
+# fact_accuracy_verified and live_source_verified are False.
+```
+
+Source entries are required to contain only `claim`, public HTTPS `source_url`, and `source_excerpt`. Up to 12 bounded entries are accepted. The generator receives them as **untrusted user data**, separate from the trusted style instructions; it requests `[F1]`, `[F2]` source markers. Unknown markers can be detected, but a citation marker **does not** establish that the generated sentence is supported. The text itself, factual truth and any claimed firsthand experience still need a human editor.
+
+For explicit *pre-generation excerpt matching*, use `packet.check_source_excerpts()`. This calls Pennovia's existing bounded public-HTTPS article reader, which rejects private/local destinations, redirects to such destinations and environment proxies. Results distinguish `source_excerpt_found` from `claim_truth_verified=False`, with a SHA-256 of extracted source text. Even a real excerpt occurrence proves only that the cited page contained that text when checked, **not** the full claim. The returned hash is not a live-source publication receipt.
+
+CLI users can provide `--facts-file facts.json` on `pennovia generate` or `pennovia run`; add `--verify-facts` to fail before model inference if the supplied excerpts are not found. Studio has an optional expandable factual-source JSON field and keeps its review notes separate from the voice profile. No facts are silently extracted from an author's old articles.
+
 ## audit
 
 ```python
