@@ -143,6 +143,14 @@ url: str = save_wordpress(content, title,
 
 WordPress requires a canonical HTTPS base URL. Redirects and invalid responses are rejected; network failures raise `RuntimeError`.
 
+### Optional authenticated readback of remote writes
+
+The Python API supports **opt-in** `verify_readback=True` on `save_wordpress(...)` and `save_google_drive(...)`. Defaults remain unchanged for existing CLI, Studio and API users.
+
+WordPress requires a numeric POST `id` and performs an authenticated `GET /wp-json/wp/v2/posts/{id}?context=edit` on the same canonical HTTPS site, without redirects. It compares the returned ID, requested draft/publish status and actual `content.raw` against the submitted HTML. Drive requires the upload file ID, then reads metadata and actual bytes back from that ID, checking name, MIME type and exact content. All readback attempts happen after a **single** remote write; a missing, mismatched, denied, or timed-out readback raises `RemoteOutcomeUnknown` rather than retrying a write that might already exist.
+
+This is an *outcome verification capability*, **not evidence that a remote environment has been tested** or that generated prose is correct. Independent acceptance still requires explicitly authorized nonproduction WordPress and Google Drive destinations and actual immutable readback receipts. No production test objects are created by CI.
+
 ### One-command direct WordPress publication safety
 
 `pennovia run --dest wordpress --publish` now requests the optional local Ollama completion receipt before attempting the remote write. A known token-budget cutoff or unknown completion, or clear draft-integrity failures (too short, unresolved factual placeholders, wrong output language, severe repetition), block **direct publication before the WordPress request**. A completed result does **not** prove factual accuracy, source evidence, author resemblance, or editorial approval. Use local draft export, check facts and the author's intended voice, then explicitly publish the edited version with `pennovia export --input ... --dest wordpress --publish`. Ordinary local export and WordPress *draft* creation remain available for editing, including incomplete content with an explicit warning. `--publish` has no meaning for non-WordPress destinations and is rejected on the `run` path.
