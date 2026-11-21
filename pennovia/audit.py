@@ -41,10 +41,10 @@ class AuditResult:
 # fill-in markers. This is a deliberately conservative detection rule; it
 # cannot establish factual accuracy or detect all unsupported claims.
 _UNRESOLVED_PLACEHOLDER = re.compile(
-    r"(?<!\\w)_{4,}(?!\\w)|"
-    r"\\[\\s*(?:airport|bus|train|taxi|ticket|hotel|restaurant|place|"
+    r"(?<!\w)_{4,}(?!\w)|"
+    r"\[\s*(?:airport|bus|train|taxi|ticket|hotel|restaurant|place|"
     r"location|station|fare|price|distance|attraction|month|date|"
-    r"time|name|code|address|route)[a-z0-9 _-]{0,35}\\s*\\]",
+    r"time|name|code|address|route)[a-z0-9 _-]{0,35}\s*\]",
     re.IGNORECASE,
 )
 
