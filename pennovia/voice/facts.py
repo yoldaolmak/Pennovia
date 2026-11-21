@@ -33,13 +33,14 @@ def _https_url(value: str) -> str:
         port = parsed.port
     except ValueError as exc:
         raise ValueError("Invalid evidence source URL") from exc
-    if (parsed.scheme != "https" or not host or not host.strip(".")
+    canonical_host = host.rstrip(".").lower() if host else ""
+    if (parsed.scheme != "https" or not canonical_host
             or parsed.username is not None or parsed.password is not None
-            or port not in (None, 443) or host.lower() == "localhost"
-            or host.lower().endswith((".localhost", ".local", ".internal"))):
+            or port not in (None, 443) or canonical_host == "localhost"
+            or canonical_host.endswith((".localhost", ".local", ".internal"))):
         raise ValueError("Evidence source must be a public HTTPS URL")
     try:
-        address = ipaddress.ip_address(host.strip("[]"))
+        address = ipaddress.ip_address(canonical_host.strip("[]"))
     except ValueError:
         pass
     else:
@@ -71,7 +72,11 @@ class FactPacket:
             except (ValueError, TypeError) as exc:
                 raise ValueError("Fact packet must be valid JSON") from exc
         if isinstance(value, dict):
-            if len(json.dumps(value, ensure_ascii=False)) > 18_000:
+            try:
+                encoded = json.dumps(value, ensure_ascii=False)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Fact packet must be JSON-compatible") from exc
+            if len(encoded) > 18_000:
                 raise ValueError("Fact packet is too large")
         if not isinstance(value, dict) or set(value) != {"facts"}:
             raise ValueError("Fact packet must contain only a facts array")
