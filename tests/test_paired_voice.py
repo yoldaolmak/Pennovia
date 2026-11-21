@@ -80,8 +80,9 @@ def test_wrong_language_is_ineligible_even_if_distance_is_better():
 
 def test_eligible_pair_can_have_a_real_comparison_without_assumed_superiority():
     heldout = " ".join(
-        f"The thoughtful traveler considered option {chr(97 + i)} before "
-        "crossing the bridge and entering the town." for i in range(23)
+        f"The {chr(97 + i)} traveler considered {chr(97 + i)} options "
+        f"before {chr(97 + i)} crossings as the evening approached."
+        for i in range(23)
     )
     case = paired.Case("case-en", "Writer", "en",
                        ("This training passage has a different structure.",),
