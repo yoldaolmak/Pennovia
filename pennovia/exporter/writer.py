@@ -120,10 +120,13 @@ def save_local(content: str, title: str, fmt: str,
 
     return filepath
 
-def save_google_drive(content: str, title: str, fmt: str) -> str:
+def save_google_drive(content: str, title: str, fmt: str,
+                      *, verify_readback: bool = False) -> str:
     """Upload to Google Drive root folder. Requires GOOGLE_DRIVE_TOKEN env var."""
     if fmt not in {"html", "txt", "pdf"}:
         raise ValueError(f"Unsupported export format: {fmt}")
+    if type(verify_readback) is not bool:
+        raise ValueError("verify_readback must be boolean")
     try:
         from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
@@ -179,17 +182,43 @@ def save_google_drive(content: str, title: str, fmt: str) -> str:
         raise RemoteOutcomeUnknown(
             "Google Drive returned an invalid file response; check Drive before retrying"
         )
+    if verify_readback:
+        file_id = file.get("id")
+        if not isinstance(file_id, str) or not file_id.strip():
+            raise RemoteOutcomeUnknown(
+                "Google Drive response lacks file ID; uploaded file may exist. Check Drive before retrying"
+            )
+        try:
+            details = service.files().get(
+                fileId=file_id, fields="id,name,mimeType",
+            ).execute()
+            read_bytes = service.files().get_media(fileId=file_id).execute()
+        except Exception as exc:
+            raise RemoteOutcomeUnknown(
+                "Google Drive readback uncertain after upload; check Drive before retrying"
+            ) from exc
+        if (not isinstance(details, dict) or details.get("id") != file_id
+                or details.get("name") != name
+                or details.get("mimeType") != mime
+                or not isinstance(read_bytes, bytes) or read_bytes != data):
+            raise RemoteOutcomeUnknown(
+                "Google Drive readback differs from uploaded content; check Drive before retrying"
+            )
     return link
 
 
 def save_wordpress(content: str, title: str,
                    wp_url: str = None, wp_user: str = None,
-                   wp_password: str = None, publish: bool = False) -> str:
+                   wp_password: str = None, publish: bool = False,
+                   *, verify_readback: bool = False) -> str:
     """Publish to WordPress via REST API. Returns post URL."""
     try:
         import requests
     except ImportError as exc:
         raise RuntimeError("WordPress support requires: pip install requests") from exc
+
+    if type(verify_readback) is not bool:
+        raise ValueError("verify_readback must be boolean")
 
     url = wp_url or os.environ.get("WP_URL")
     user = wp_user or os.environ.get("WP_USER")
@@ -246,4 +275,32 @@ def save_wordpress(content: str, title: str,
         raise RemoteOutcomeUnknown(
             "WordPress returned an invalid post response; check drafts before retrying"
         )
+    if verify_readback:
+        post_id = result.get("id")
+        if type(post_id) is not int or post_id <= 0:
+            raise RemoteOutcomeUnknown(
+                "WordPress response lacks a valid post ID; check drafts before retrying"
+            )
+        # The same canonical HTTPS REST origin and credentials, no redirects
+        # or fallback to a URL supplied by an untrusted remote response.
+        try:
+            read = requests.get(
+                f"{url.rstrip('/')}/wp-json/wp/v2/posts/{post_id}?context=edit",
+                auth=(user, pwd), verify=True, timeout=30,
+                allow_redirects=False,
+            )
+            if read.status_code < 200 or read.status_code >= 300:
+                raise ValueError("Unexpected WordPress readback status")
+            remote = read.json()
+        except (requests.RequestException, ValueError, TypeError) as exc:
+            raise RemoteOutcomeUnknown(
+                "WordPress readback uncertain after write; check drafts before retrying"
+            ) from exc
+        if (not isinstance(remote, dict) or remote.get("id") != post_id
+                or remote.get("status") != status
+                or not isinstance(remote.get("content"), dict)
+                or remote["content"].get("raw") != html_content):
+            raise RemoteOutcomeUnknown(
+                "WordPress readback does not match saved post; check drafts before retrying"
+            )
     return result["link"]
