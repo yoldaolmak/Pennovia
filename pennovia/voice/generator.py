@@ -160,8 +160,12 @@ def generate_ollama(profile: VoiceProfile, content_type: str, topic: str,
         "stream": False,
     }
     try:
-        resp = requests.post("http://localhost:11434/api/chat", json=payload, timeout=300)
-        resp.raise_for_status()
+        # Local writing samples must never be forwarded to an ambient HTTP
+        # proxy or authenticated through a user's .netrc configuration.
+        with requests.Session() as session:
+            session.trust_env = False
+            resp = session.post("http://127.0.0.1:11434/api/chat", json=payload, timeout=300)
+            resp.raise_for_status()
     except requests.RequestException as exc:
         raise RuntimeError("Ollama request failed; check local service and model") from exc
     try:
