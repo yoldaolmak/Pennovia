@@ -427,6 +427,7 @@ function exportPayload(destination) {
   return {
     profile: state.profile,
     draft: $("draft").value,
+    fact_packet: $("fact-packet").value.trim() || null,
     title: $("export-title-input").value.trim() || $("topic").value.trim() || "Untitled draft",
     format: $("export-format").value,
     destination,
