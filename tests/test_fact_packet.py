@@ -141,6 +141,10 @@ def test_cli_facts_file_propagates_to_generation_without_leaking_source_text(
     cli.main()
     assert FactPacket.from_data(seen["facts"]).facts[0].id == "F1"
     assert out.exists()
+    saved = out.read_text(encoding="utf-8")
+    assert "[F1]" in saved
+    assert FACTS["facts"][0]["source_url"] in saved
+    assert FACTS["facts"][0]["source_excerpt"] not in saved
     reported = capsys.readouterr()
     assert "neither sources nor claims verified" in reported.err
     assert FACTS["facts"][0]["source_excerpt"] not in reported.out
@@ -230,3 +234,52 @@ def test_cli_verify_facts_refuses_model_call_when_excerpt_not_matched(
         cli.main()
     assert exc.value.code == 1
     assert "no model call was made" in capsys.readouterr().err
+
+
+def test_fact_source_notes_are_resolvable_and_idempotent_without_quote_copying():
+    packet = FactPacket.from_data(FACTS)
+    draft = "One isolated sentence cites the source [F1]."
+    exported = packet.append_source_notes(draft)
+    assert exported.startswith(draft)
+    assert "Source leads supplied by editor (unverified)" in exported
+    assert "https://example.org/harbor-service" in exported
+    assert FACTS["facts"][0]["source_excerpt"] not in exported
+    assert packet.append_source_notes(exported) == exported
+    with pytest.raises(ValueError):
+        packet.append_source_notes("  ")
+
+
+def test_studio_export_preserves_source_mapping_for_wordpress_draft(monkeypatch):
+    from pennovia.exporter import writer
+    seen = []
+
+    def fake_wp(content, title, publish=False):
+        assert publish is False
+        seen.append((content, title))
+        return "https://example.org/edit-draft"
+
+    monkeypatch.setattr(writer, "save_wordpress", fake_wp)
+    result = server._export_request({
+        "title": "A fictional island guide",
+        "destination": "wordpress", "format": "html",
+        "fact_packet": FACTS,
+    }, "The fictional harbor [F1].")
+    assert result["url"] == "https://example.org/edit-draft"
+    assert len(seen) == 1
+    assert "The fictional harbor [F1]." in seen[0][0]
+    assert "Source leads supplied by editor (unverified)" in seen[0][0]
+    assert FACTS["facts"][0]["source_url"] in seen[0][0]
+    assert FACTS["facts"][0]["source_excerpt"] not in seen[0][0]
+
+
+def test_studio_local_download_preserves_source_notes_in_txt():
+    result = server._export_request({
+        "title": "Source note test", "destination": "download",
+        "format": "txt", "fact_packet": FACTS,
+    }, "A source-guided fictional port [F1].")
+    assert isinstance(result, tuple)
+    mime, data, fmt = result
+    assert "plain" in mime
+    assert fmt == "txt"
+    assert b"[F1]" in data
+    assert b"https://example.org/harbor-service" in data
