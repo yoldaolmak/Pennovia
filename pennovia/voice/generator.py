@@ -4,8 +4,44 @@ Supports: OpenAI API, Anthropic Claude, OpenRouter, local Ollama, Codex CLI
 """
 import os
 import subprocess
+from dataclasses import dataclass
 from .analyzer import VoiceProfile
 from ..content_types.registry import get as get_type
+
+
+@dataclass(frozen=True)
+class OllamaGeneration:
+    """Optional inference receipt; default generation API still returns str."""
+
+    text: str
+    completion_status: str  # complete | truncated | unknown
+    done_reason: str | None
+    prompt_tokens: int | None
+    generated_tokens: int | None
+
+
+def _ollama_receipt(payload: dict) -> OllamaGeneration:
+    """Reject invalid content, but never fabricate a model completion receipt."""
+    if not isinstance(payload, dict):
+        raise RuntimeError("Ollama returned an invalid response structure")
+    try:
+        text = _require_draft(payload["message"]["content"], "Ollama")
+    except (KeyError, TypeError) as exc:
+        raise RuntimeError("Ollama returned an invalid response structure") from exc
+    reason = payload.get("done_reason")
+    if not isinstance(reason, str) or reason not in ("stop", "length"):
+        reason = None
+    status = {"stop": "complete", "length": "truncated"}.get(reason, "unknown")
+
+    def token_count(name: str) -> int | None:
+        number = payload.get(name)
+        return number if type(number) is int and number >= 0 else None
+
+    return OllamaGeneration(
+        text=text, completion_status=status, done_reason=reason,
+        prompt_tokens=token_count("prompt_eval_count"),
+        generated_tokens=token_count("eval_count"),
+    )
 
 
 def _require_draft(content, backend: str) -> str:
@@ -144,7 +180,8 @@ def generate_openai(profile: VoiceProfile, content_type: str, topic: str,
 
 
 def generate_ollama(profile: VoiceProfile, content_type: str, topic: str,
-                    model: str = "llama3", max_tokens: int | None = None) -> str:
+                    model: str = "llama3", max_tokens: int | None = None,
+                    return_metadata: bool = False) -> str | OllamaGeneration:
     try:
         import requests
     except ImportError as exc:
@@ -172,11 +209,13 @@ def generate_ollama(profile: VoiceProfile, content_type: str, topic: str,
             resp.raise_for_status()
     except requests.RequestException as exc:
         raise RuntimeError("Ollama request failed; check local service and model") from exc
+    if type(return_metadata) is not bool:
+        raise ValueError("Ollama return_metadata must be boolean")
     try:
-        content = resp.json()["message"]["content"]
-    except (ValueError, KeyError, TypeError) as exc:
+        result = _ollama_receipt(resp.json())
+    except ValueError as exc:
         raise RuntimeError("Ollama returned an invalid response structure") from exc
-    return _require_draft(content, "Ollama")
+    return result if return_metadata else result.text
 
 
 def generate_codex(profile: VoiceProfile, content_type: str, topic: str) -> str:
