@@ -76,6 +76,7 @@ def test_neutral_model_run_is_local_and_proxy_free(monkeypatch):
             assert url == "http://127.0.0.1:11434/api/chat"
             assert kwargs["json"]["model"] == paired.MODEL
             assert kwargs["json"]["stream"] is False
+            assert kwargs["json"]["options"] == {"num_predict": paired.MAX_TOKENS}
             return SimpleNamespace(
                 raise_for_status=lambda: None,
                 json=lambda: {"message": {"content": "A complete neutral draft."}},
