@@ -134,8 +134,8 @@ def _drive(monkeypatch, *, change=None, get_error=None, upload=None):
 
         def execute(self):
             if self.kind == "create":
-                return {"id": "file1", "webViewLink": "https://drive.example/view"}
-                if upload is None else upload
+                return ({"id": "file1", "webViewLink": "https://drive.example/view"}
+                        if upload is None else upload)
             if get_error:
                 raise get_error
             if self.kind == "get":
