@@ -202,7 +202,11 @@ def _download_draft(draft: str, title: str, fmt: str) -> tuple[str, bytes, str]:
 
 def _export_request(payload: dict, draft: str) -> dict | tuple[str, bytes, str]:
     from pennovia.exporter.writer import save_google_drive, save_wordpress
+    from pennovia.voice.facts import FactPacket
 
+    facts = payload.get("fact_packet")
+    if facts not in (None, ""):
+        draft = FactPacket.from_data(facts).append_source_notes(draft)
     destination = payload.get("destination")
     title = _required_string(payload, "title", limit=200)
     if destination == "wordpress":
