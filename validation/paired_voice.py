@@ -25,6 +25,9 @@ else:
     from live_model import MODEL, OLLAMA, _model_digest, _download_source, select_chapters
 
 
+MAX_TOKENS = 640  # identical model decoding budget for both arms
+
+
 TURKISH_STORIES = (
     ("Velinimet", "https://tr.wikisource.org/wiki/Velinimet"),
     ("Nâdan", "https://tr.wikisource.org/wiki/N%C3%A2dan"),
@@ -33,18 +36,18 @@ TURKISH_STORIES = (
 TOPICS = {
     "en": (
         "Write an original fictional scene: a traveler takes shelter from rain near "
-        "a market and decides whether to keep walking. Aim for 350-500 words. "
+        "a market and decides whether to keep walking. Aim for 180-260 words. "
         "This is fiction; do not claim a real firsthand visit.",
         "Write an original fictional scene: an old letter is found inside a borrowed "
-        "book, but its message is ambiguous. Aim for 350-500 words. "
+        "book, but its message is ambiguous. Aim for 180-260 words. "
         "This is fiction; do not invent verifiable real-world facts.",
     ),
     "tr": (
         "Özgün bir kurmaca sahne yazın: yağmurdan bir çarşı yakınında korunan "
-        "yolcu yürümeye devam edip etmeyeceğine karar veriyor. 350-500 kelime "
+        "yolcu yürümeye devam edip etmeyeceğine karar veriyor. 180-260 kelime "
         "hedefleyin. Gerçekte yaşanmış bir ziyaret iddia etmeyin.",
         "Özgün bir kurmaca sahne yazın: ödünç bir kitabın içinde eski bir mektup "
-        "bulunuyor ama mesajı belirsiz. 350-500 kelime hedefleyin. "
+        "bulunuyor ama mesajı belirsiz. 180-260 kelime hedefleyin. "
         "Gerçek dünyaya ilişkin doğrulanamaz olgular uydurmayın.",
     ),
 }
@@ -142,7 +145,7 @@ def _neutral(topic: str, language: str) -> str:
         f"Use this structure: {structure}. "
         "Write only the text, with natural paragraphs. Do not invent quotes "
         "from real people, concrete dates, or verified firsthand encounters. "
-        "Follow the user's 350-500 word target rather than padding."
+        "Follow the user's 180-260 word target rather than padding."
     )
     with requests.Session() as session:
         session.trust_env = False
@@ -152,6 +155,7 @@ def _neutral(topic: str, language: str) -> str:
                     {"role": "system", "content": system},
                     {"role": "user", "content": topic},
                 ], "stream": False,
+                "options": {"num_predict": MAX_TOKENS},
             }, timeout=300,
         )
         response.raise_for_status()
@@ -237,6 +241,7 @@ def main() -> None:
         "status": "paired_exploratory_model_executed",
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "provider": "local Ollama", "model": MODEL, "digest": digest,
+        "max_tokens_per_arm": MAX_TOKENS,
         "method": "One model, one content type, matched topics, 2 cases x 2 topics x 2 arms. "
                   "Held-out observable stylistic distance; no blind human review performed.",
         "not_product_acceptance": True,
@@ -256,7 +261,8 @@ def main() -> None:
         profile = analyze(case.training, author_name=case.author, language=case.language)
         for index, topic in enumerate(TOPICS[case.language], 1):
             paired_id = f"{case.identifier}-{index}"
-            styled = generate(profile, "story", topic, backend="ollama", model=MODEL)
+            styled = generate(profile, "story", topic, backend="ollama",
+                              model=MODEL, max_tokens=MAX_TOKENS)
             neutral = _neutral(topic, case.language)
             metrics = evaluate_pair(styled, neutral, case)
             order = ["styled", "neutral"]
