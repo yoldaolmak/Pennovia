@@ -18,7 +18,9 @@ from bs4 import BeautifulSoup
 
 from pennovia.content_types.registry import get as get_type
 from pennovia.voice.analyzer import _detect_language, analyze
-from pennovia.voice.generator import _require_draft, generate
+from pennovia.voice.generator import (
+    OllamaGeneration, _ollama_receipt, generate,
+)
 from pennovia.voice.integrity import repeated_fourgram_share
 if __package__:
     from .live_model import MODEL, OLLAMA, _model_digest, _download_source, select_chapters
@@ -136,7 +138,8 @@ def load_cases() -> list[Case]:
     return [twain, seyfettin]
 
 
-def _neutral(topic: str, language: str) -> str:
+def _neutral(topic: str, language: str,
+             return_metadata: bool = False) -> str | OllamaGeneration:
     """Match the content-type structure, topic and model, without style metrics."""
     ctype = get_type("story")
     structure = "; ".join(ctype["structure"])
@@ -160,7 +163,8 @@ def _neutral(topic: str, language: str) -> str:
             }, timeout=300,
         )
         response.raise_for_status()
-        return _require_draft(response.json()["message"]["content"], "Neutral Ollama")
+        receipt = _ollama_receipt(response.json())
+        return receipt if return_metadata else receipt.text
 
 
 def _fingerprint(text: str, language: str) -> dict[str, float]:
@@ -204,7 +208,9 @@ def copied_long_span(draft: str, training: tuple[str, ...], *, size: int = 12) -
     return any(tuple(tokens[i:i + size]) in source for i in range(len(tokens) - size + 1))
 
 
-def evaluate_pair(styled: str, neutral: str, case: Case) -> dict:
+def evaluate_pair(styled: str, neutral: str, case: Case,
+                  styled_completion: str = "complete",
+                  neutral_completion: str = "complete") -> dict:
     """Record diagnostics for every pair; never count a non-comparable win."""
     styled_words, neutral_words = len(styled.split()), len(neutral.split())
     if not styled_words or not neutral_words:
@@ -220,6 +226,10 @@ def evaluate_pair(styled: str, neutral: str, case: Case) -> dict:
     neutral_repeated, _, neutral_tokens = repeated_fourgram_share(neutral)
 
     reasons = []
+    if styled_completion != "complete":
+        reasons.append("styled_generation_" + styled_completion)
+    if neutral_completion != "complete":
+        reasons.append("neutral_generation_" + neutral_completion)
     if not comparable:
         reasons.append("incomparable_lengths")
     if min(styled_words, neutral_words) < 120:
@@ -246,6 +256,8 @@ def evaluate_pair(styled: str, neutral: str, case: Case) -> dict:
         "neutral_12gram_source_copy": neutral_copy,
         "styled_repeated_fourgram_share": styled_repeated,
         "neutral_repeated_fourgram_share": neutral_repeated,
+        "styled_completion_status": styled_completion,
+        "neutral_completion_status": neutral_completion,
         "eligible_for_style_comparison": eligible,
         "invalid_reasons": reasons,
     }
@@ -270,7 +282,8 @@ def main() -> None:
         "provider": "local Ollama", "model": MODEL, "digest": digest,
         "max_tokens_per_arm": MAX_TOKENS,
         "method": "One model, one content type, matched topics, 2 cases x 2 topics x 2 arms. "
-                  "Held-out observable stylistic distance; no blind human review performed.",
+                  "Held-out observable stylistic distance, explicit Ollama completion "
+                  "receipts; no blind human review performed.",
         "not_product_acceptance": True,
         "cases": [], "pairs": [],
     }
@@ -288,10 +301,25 @@ def main() -> None:
         profile = analyze(case.training, author_name=case.author, language=case.language)
         for index, topic in enumerate(TOPICS[case.language], 1):
             paired_id = f"{case.identifier}-{index}"
-            styled = generate(profile, "story", topic, backend="ollama",
-                              model=MODEL, max_tokens=MAX_TOKENS)
-            neutral = _neutral(topic, case.language)
-            metrics = evaluate_pair(styled, neutral, case)
+            styled_response = generate(
+                profile, "story", topic, backend="ollama",
+                model=MODEL, max_tokens=MAX_TOKENS, return_metadata=True,
+            )
+            neutral_response = _neutral(topic, case.language, return_metadata=True)
+            if not isinstance(styled_response, OllamaGeneration):
+                raise RuntimeError("Styled Ollama response is missing its receipt")
+            if not isinstance(neutral_response, OllamaGeneration):
+                raise RuntimeError("Neutral Ollama response is missing its receipt")
+            styled, neutral = styled_response.text, neutral_response.text
+            metrics = evaluate_pair(
+                styled, neutral, case,
+                styled_completion=styled_response.completion_status,
+                neutral_completion=neutral_response.completion_status,
+            )
+            metrics["styled_generated_tokens"] = styled_response.generated_tokens
+            metrics["neutral_generated_tokens"] = neutral_response.generated_tokens
+            metrics["styled_prompt_tokens"] = styled_response.prompt_tokens
+            metrics["neutral_prompt_tokens"] = neutral_response.prompt_tokens
             order = ["styled", "neutral"]
             random.Random(int(hashlib.sha256(paired_id.encode()).hexdigest(), 16)).shuffle(order)
             files = {}
