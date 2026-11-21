@@ -100,7 +100,7 @@ result.transition_match  # int 0–20
 result.style_match    # int 0–20
 result.no_ai_cliches  # int 0–20
 result.issues         # list[str]
-result.passed()       # bool: score >= 70 AND text is at least 200 words; not calibrated
+result.passed()       # bool: score >= 70, at least 200 words, no recognised unresolved placeholders; not calibrated
 result.report()       # str — formatted report
 ```
 
