@@ -199,6 +199,7 @@ def test_ollama_optional_receipt_preserves_generation_completion(monkeypatch, re
         def json(self):
             return {
                 "message": {"content": "  An editable draft that can be kept.  "},
+                "done": True,
                 "done_reason": reason,
                 "prompt_eval_count": 250,
                 "eval_count": 640,
@@ -223,6 +224,7 @@ def test_ollama_optional_receipt_preserves_generation_completion(monkeypatch, re
 def test_ollama_untrusted_token_usage_never_creates_fake_counts():
     result = generator._ollama_receipt({
         "message": {"content": "Draft"},
+        "done": True,
         "done_reason": "stop",
         "prompt_eval_count": True,
         "eval_count": "500",
@@ -254,3 +256,19 @@ def test_auto_local_metadata_and_cloud_backwards_compatibility(monkeypatch):
     )
     assert receipt.completion_status == "truncated"
     assert calls == [{}, {"return_metadata": True}]
+
+
+def test_ollama_does_not_certify_done_reason_without_true_done_flag():
+    receipt = generator._ollama_receipt({
+        "message": {"content": "Text"},
+        "done_reason": "stop",
+        "eval_count": 12,
+    })
+    assert receipt.completion_status == "unknown"
+    receipt = generator._ollama_receipt({
+        "message": {"content": "Text"},
+        "done": False,
+        "done_reason": "stop",
+    })
+    assert receipt.completion_status == "unknown"
+    assert receipt.done_reason == "stop"
