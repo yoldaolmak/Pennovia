@@ -169,3 +169,27 @@ def test_neutral_optional_receipt_exposes_model_length_cutoff(monkeypatch):
     assert receipt.completion_status == "truncated"
     assert receipt.generated_tokens == paired.MAX_TOKENS
     assert paired._neutral("A fictional scene.", "en") == receipt.text
+
+    # Paired model comparisons must use a shared, explicit seed.
+    def seeded_session():
+        class Session:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def post(self, url, **kwargs):
+                assert kwargs["json"]["options"] == {
+                    "num_predict": paired.MAX_TOKENS, "seed": 315
+                }
+                return SimpleNamespace(
+                    raise_for_status=lambda: None,
+                    json=lambda: {"message": {"content": "Seeded output."},
+                                  "done": True, "done_reason": "stop"},
+                )
+        return Session()
+
+    monkeypatch.setattr(paired.requests, "Session", seeded_session)
+    assert paired._neutral("A scene.", "en", seed=315) == "Seeded output."
+
