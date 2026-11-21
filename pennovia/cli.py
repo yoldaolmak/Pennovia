@@ -181,7 +181,10 @@ def cmd_generate(args):
     write_private_text(out, content, overwrite=getattr(args, "overwrite", False))
     _ok(f"Saved: {out}")
     if getattr(args, "verbose", False):
-        print("\n" + result.report())
+        report = result.report()
+        if not review_ok and result.passed():
+            report = report.replace("[PASS]", "[FAIL: generation incomplete or unconfirmed]")
+        print("\n" + report)
 
 
 def _export_all(content, title, formats, destination, *, publish=False):
