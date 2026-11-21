@@ -181,6 +181,11 @@ def test_ollama_optional_token_budget_is_bounded_and_sent_to_local_model(monkeyp
     result = generator.generate_ollama(PROFILE, "story", "Topic", max_tokens=640)
     assert result == "A complete local draft."
 
+    for invalid in (-1, 2_147_483_648, True, "23", 3.5):
+        with pytest.raises(ValueError, match="seed"):
+            generator.generate_ollama(PROFILE, "story", "Topic", seed=invalid)
+
+
 
 
 @pytest.mark.parametrize(
@@ -272,3 +277,45 @@ def test_ollama_does_not_certify_done_reason_without_true_done_flag():
     })
     assert receipt.completion_status == "unknown"
     assert receipt.done_reason == "stop"
+
+
+def test_valid_local_seed_is_sent_only_to_ollama_request(monkeypatch):
+    class FakeRequestError(Exception):
+        pass
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"message": {"content": "Seeded draft."}, "done": True,
+                    "done_reason": "stop"}
+
+    def response_with_seed():
+        return Response()
+
+    def session_factory():
+        class Session:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def post(self, url, **kwargs):
+                assert not self.trust_env
+                assert kwargs["json"]["options"] == {
+                    "num_predict": 640, "seed": 123456
+                }
+                return response_with_seed()
+        return Session()
+
+    monkeypatch.setitem(
+        sys.modules, "requests",
+        SimpleNamespace(Session=session_factory, RequestException=FakeRequestError),
+    )
+    receipt = generator.generate_ollama(
+        PROFILE, "story", "Topic", max_tokens=640, seed=123456,
+        return_metadata=True,
+    )
+    assert receipt.completion_status == "complete"
