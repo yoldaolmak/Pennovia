@@ -1,0 +1,51 @@
+name: Seed Default-Branch Local Model Cache
+
+# One-time cache priming on main (and explicit manual refresh). PR jobs can
+# restore main's cache, while caches created only on a PR merge ref are scoped
+# to that PR. This never runs inference or publishes author content.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/seed-model-cache.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pennovia-model-cache-main
+  cancel-in-progress: false
+
+jobs:
+  seed-ollama-model:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Restore or initialize shared Ollama model cache
+        id: model-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.ollama/models
+          key: ${{ runner.os }}-pennovia-ollama-qwen25-15b-v1
+      - name: Install Ollama CLI on existing runner
+        run: |
+          set -euo pipefail
+          curl -fsSL https://ollama.com/install.sh | sh
+          nohup ollama serve > "$RUNNER_TEMP/ollama.log" 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:11434/api/tags >/dev/null
+      - name: Verify model available in shared cache
+        run: |
+          set -euo pipefail
+          if ! ollama list | grep -Eq '^qwen2[.]5:1[.]5b[[:space:]]'; then
+            ollama pull qwen2.5:1.5b
+          fi
+          ollama show qwen2.5:1.5b >/dev/null
+          echo "Default-branch local-model cache is usable; this does not prove editorial quality."
