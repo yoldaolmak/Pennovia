@@ -236,13 +236,44 @@ def cmd_export(args):
     fmts = _export_formats(args.format, dest, "html")
     _export_all(content, args.title, fmts, dest, publish=getattr(args, "publish", False))
 
+def _publication_preflight(*, publish, destination, review, generation):
+    """Reject known incomplete or unsafe one-command WordPress publication.
+
+    A heuristic PASS is not factual verification. Author review is mandatory.
+    Exporting a reviewed, edited file is a separate explicit operation.
+    """
+    if not publish:
+        return
+    if destination != "wordpress":
+        raise ValueError("--publish is only valid for WordPress")
+    from pennovia.voice.generator import OllamaGeneration
+
+    if (isinstance(generation, OllamaGeneration)
+            and generation.completion_status != "complete"):
+        raise RuntimeError(
+            "WordPress publication blocked: local model did not confirm a "
+            "completed draft. Save locally, edit and publish explicitly."
+        )
+    hard_issues = {
+        "empty_content", "too_short", "unresolved_placeholder",
+        "output_language_mismatch", "severe_text_repetition",
+    }
+    reported = hard_issues.intersection(review.issues)
+    if reported:
+        raise RuntimeError(
+            "WordPress publication blocked by draft-integrity findings: "
+            + ", ".join(sorted(reported))
+            + ". Save locally, verify and publish the edited draft explicitly."
+        )
+
+
 def cmd_run(args):
     dest = args.dest or "downloads"
     fmts = _export_formats(args.format, dest, "html" if dest == "wordpress" else "html,txt")
     if getattr(args, "save_profile", None):
         _check_output_path(args.save_profile, getattr(args, "overwrite", False))
     from pennovia.voice.analyzer import analyze
-    from pennovia.voice.generator import generate
+    from pennovia.voice.generator import OllamaGeneration, generate
     from pennovia.audit import audit
     from pennovia.voice.scorer import score
     STEPS = 5
@@ -259,17 +290,34 @@ def cmd_run(args):
         kwargs = {}
         if getattr(args, "model", None):
             kwargs["model"] = args.model
-        content = generate(profile, args.type or "travel_blog", args.topic,
-                           backend=args.backend or "auto", **kwargs)
+        generation = generate(
+            profile, args.type or "travel_blog", args.topic,
+            backend=args.backend or "auto", return_metadata=True, **kwargs
+        )
     except RuntimeError as e:
         _fail(str(e))
+    content = (generation.text if isinstance(generation, OllamaGeneration)
+               else generation)
+    completion = (generation.completion_status
+                  if isinstance(generation, OllamaGeneration) else None)
     _ok(f"{len(content.split()):,} words ({time.time()-t0:.0f}s)")
     _step(4, STEPS, "Auditing...")
     result = audit(content, profile)
     sim = score(content, profile)
     _ok(f"Score: {result.total_score}/100 | similarity: {sim:.2f}")
+    if completion == "truncated":
+        _warn("Ollama token limit reached: draft incomplete, editorial review required.")
+    elif completion == "unknown":
+        _warn("Ollama completion unconfirmed: editorial review required.")
     if result.issues:
         _warn(f"Issues: {', '.join(result.issues)}")
+    try:
+        _publication_preflight(
+            publish=getattr(args, "publish", False),
+            destination=dest, review=result, generation=generation,
+        )
+    except (RuntimeError, ValueError) as exc:
+        _fail(str(exc))
     if getattr(args, "save_profile", None):
         profile.save(args.save_profile, overwrite=getattr(args, "overwrite", False))
         _ok(f"Profile: {args.save_profile}")
