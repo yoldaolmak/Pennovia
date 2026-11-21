@@ -10,7 +10,7 @@ const state = {
 const buttons = ["analyze", "generate", "review", "download", "wordpress", "drive", "profile-save"];
 const editableFields = [
   "url-input", "paste-input", "file-input", "author", "language", "profile-import",
-  "topic", "content-type", "backend", "model", "draft", "export-title-input",
+  "topic", "fact-packet", "content-type", "backend", "model", "draft", "export-title-input",
   "export-format", "add-urls", "add-text",
 ];
 const remoteAttempts = new Map(); // Browser-session only; remote exactly-once is not guaranteed.
@@ -296,6 +296,12 @@ function renderReview(review) {
   $("review-issues").textContent = review.issues.length
     ? "Review notes: " + review.issues.join(" · ")
     : "No automated issues flagged.";
+  if (review.factual_sources) {
+    const leads = review.factual_sources;
+    $("review-issues").textContent += " · " + leads.supplied
+      + " user-supplied fact lead(s), " + leads.cited_ids.length
+      + " cited. Original sources and factual accuracy NOT verified.";
+  }
 }
 
 $("draft").addEventListener("input", () => {
@@ -310,6 +316,11 @@ $("draft").addEventListener("input", () => {
   updateControls();
 });
 $("topic").addEventListener("input", updateControls);
+$("fact-packet").addEventListener("input", () => {
+  clearReview(); // Earlier citation review cannot remain current after evidence changes.
+  updateControls();
+});
+
 $("backend").addEventListener("change", () => {
   const codex = $("backend").value === "codex";
   if (codex) $("model").value = "";
@@ -362,6 +373,7 @@ $("generate").addEventListener("click", () => {
   const result = await api("/api/generate", {
     profile: state.profile,
     topic: $("topic").value.trim(),
+    fact_packet: $("fact-packet").value.trim() || null,
     content_type: $("content-type").value,
     backend: $("backend").value,
     model: $("model").value.trim(),
@@ -390,7 +402,10 @@ $("generate").addEventListener("click", () => {
 $("review").addEventListener("click", () => perform(async () => {
   const profileRevision = state.profileRevision;
   const draftRevision = state.draftRevision;
-  const reviewed = await api("/api/review", { profile: state.profile, draft: $("draft").value });
+  const reviewed = await api("/api/review", {
+    profile: state.profile, draft: $("draft").value,
+    fact_packet: $("fact-packet").value.trim() || null,
+  });
   if (profileRevision !== state.profileRevision || draftRevision !== state.draftRevision) {
     throw new Error("Text changed during review; old score discarded.");
   }
