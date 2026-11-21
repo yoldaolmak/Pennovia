@@ -31,7 +31,10 @@ def _ollama_receipt(payload: dict) -> OllamaGeneration:
     reason = payload.get("done_reason")
     if not isinstance(reason, str) or reason not in ("stop", "length"):
         reason = None
-    status = {"stop": "complete", "length": "truncated"}.get(reason, "unknown")
+    # Ollama must explicitly finish its nonstreaming response. A claimed
+    # stop reason without done=true is not evidence of a complete draft.
+    status = ({"stop": "complete", "length": "truncated"}.get(reason, "unknown")
+              if payload.get("done") is True else "unknown")
 
     def token_count(name: str) -> int | None:
         number = payload.get(name)
@@ -187,6 +190,8 @@ def generate_ollama(profile: VoiceProfile, content_type: str, topic: str,
     except ImportError as exc:
         raise RuntimeError("Ollama support requires: pip install requests") from exc
 
+    if type(return_metadata) is not bool:
+        raise ValueError("Ollama return_metadata must be boolean")
     system, user = _build_prompt(profile, content_type, topic)
     payload = {
         "model": model,
@@ -209,8 +214,6 @@ def generate_ollama(profile: VoiceProfile, content_type: str, topic: str,
             resp.raise_for_status()
     except requests.RequestException as exc:
         raise RuntimeError("Ollama request failed; check local service and model") from exc
-    if type(return_metadata) is not bool:
-        raise ValueError("Ollama return_metadata must be boolean")
     try:
         result = _ollama_receipt(resp.json())
     except ValueError as exc:
