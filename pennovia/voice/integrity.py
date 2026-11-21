@@ -17,6 +17,6 @@ def repeated_fourgram_share(text: str) -> tuple[float, int, int]:
     words = re.findall(r"[^\W\d_]+", text.casefold().replace("i\u0307", "i"), re.UNICODE)
     if len(words) < 4:
         return 0.0, 0, len(words)
-    spans = Counter(zip(words, words[1:], words[2:], words[3:]))
+    spans = Counter(zip(words[:-3], words[1:-2], words[2:-1], words[3:], strict=True))
     repeated = sum(count for count in spans.values() if count >= 3)
     return round(repeated / (len(words) - 3), 3), max(spans.values()), len(words)
