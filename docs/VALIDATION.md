@@ -45,7 +45,7 @@ An `audit().passed()` result now also rejects recognisable unfinished factual pl
 
 ## How to interpret a score
 
-Audit PASS requires **70/100, at least 200 words, and no recognised unresolved placeholders**. It compares sentence rhythm, first-person rate, questions, transitions, paragraph structure and common AI clichés. Different writers can receive similar scores.
+Audit PASS requires **70/100, at least 200 words, no recognised unresolved placeholders, and no confidently detected language mismatch**. For an explicitly Turkish or English profile, a sufficiently long draft confidently classified as the other language fails review. Ambiguous language evidence does not trigger this gate; it is not a multilingual content certification. It compares sentence rhythm, first-person rate, questions, transitions, paragraph structure and common AI clichés. Different writers can receive similar scores.
 
 Turkish negation detection covers only listed forms, not every inflected verb. Vocabulary richness uses 500-token windows; recurring phrases do not cross document boundaries. These are descriptive signals, not identity tests.
 
