@@ -138,9 +138,11 @@ def cmd_analyze(args):
     _ok(f"Profile saved: {out}  ({time.time()-t0:.1f}s)")
 
 
-def _load_fact_packet(path):
-    """Read a bounded explicit source packet, never a voice/corpus document."""
+def _load_fact_packet(path, *, verify=False):
+    """Read source leads; optionally check excerpt occurrence before modeling."""
     if not path:
+        if verify:
+            raise ValueError("--verify-facts requires --facts-file")
         return None, None
     from pennovia.voice.facts import FactPacket
 
@@ -148,7 +150,19 @@ def _load_fact_packet(path):
     if selected.stat().st_size > 18_000:
         raise ValueError("Fact packet is too large")
     raw = selected.read_text(encoding="utf-8")
-    return raw, FactPacket.from_data(raw)
+    packet = FactPacket.from_data(raw)
+    if verify:
+        checks = packet.check_source_excerpts()
+        if not all(item["source_excerpt_found"] for item in checks):
+            raise ValueError(
+                "At least one factual source excerpt could not be matched; "
+                "no model call was made"
+            )
+        _warn(
+            f"Located {len(checks)} supplied source excerpts on public pages. "
+            "This does NOT verify the facts or firsthand experience."
+        )
+    return raw, packet
 
 
 def _warn_fact_review(packet, content):
@@ -181,7 +195,10 @@ def cmd_generate(args):
     _ok(f"{profile.author_name} — {profile.text_count} texts, {profile.total_words:,} words")
     _step(2, 3, f"Generating '{args.topic}' ({args.type}) via {args.backend}...")
     t0 = time.time()
-    fact_raw, fact_packet = _load_fact_packet(getattr(args, "facts_file", None))
+    fact_raw, fact_packet = _load_fact_packet(
+        getattr(args, "facts_file", None),
+        verify=getattr(args, "verify_facts", False),
+    )
     try:
         kwargs = {}
         if getattr(args, "model", None):
@@ -318,7 +335,10 @@ def cmd_run(args):
     _ok(profile.summary().split("\n")[0])
     _step(3, STEPS, f"Generating '{args.topic}' ({args.type or 'travel_blog'}) via {args.backend or 'auto'}...")
     t0 = time.time()
-    fact_raw, fact_packet = _load_fact_packet(getattr(args, "facts_file", None))
+    fact_raw, fact_packet = _load_fact_packet(
+        getattr(args, "facts_file", None),
+        verify=getattr(args, "verify_facts", False),
+    )
     try:
         kwargs = {}
         if getattr(args, "model", None):
@@ -404,6 +424,8 @@ def main():
                      choices=["auto","openai","anthropic","openrouter","ollama","codex"])
     p_g.add_argument("--model", help="Override model (e.g. gpt-4o, claude-opus-4-8)")
     p_g.add_argument("--facts-file", help="Optional JSON with explicitly supplied source facts")
+    p_g.add_argument("--verify-facts", action="store_true",
+                     help="Find source excerpts with the safe public HTTPS reader before generation")
     p_g.add_argument("--out", default="output.txt")
     p_g.add_argument("--overwrite", action="store_true", help="Replace existing draft output")
     p_g.add_argument("--verbose", action="store_true")
@@ -432,6 +454,8 @@ def main():
                      choices=["auto","openai","anthropic","openrouter","ollama","codex"])
     p_r.add_argument("--model")
     p_r.add_argument("--facts-file", help="Optional JSON with explicitly supplied source facts")
+    p_r.add_argument("--verify-facts", action="store_true",
+                     help="Find source excerpts with the safe public HTTPS reader before generation")
     p_r.add_argument("--format", default=None,
                      help="html, pdf, txt; defaults to html,txt locally or html for WordPress")
     p_r.add_argument("--dest", default="downloads",
