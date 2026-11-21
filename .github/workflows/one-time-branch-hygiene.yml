@@ -1,0 +1,80 @@
+name: One-time verified branch hygiene
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/one-time-branch-hygiene.yml
+
+permissions: {}
+
+jobs:
+  prune-verified-legacy-branches:
+    if: github.repository == 'yoldaolmak/Pennovia'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Verify all merged PRs and prune only pinned stale branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, sys, time, urllib.parse, urllib.request
+          ROOT = "https://api.github.com/repos/yoldaolmak/Pennovia"
+          TOKEN = os.environ["GH_TOKEN"]
+          EXPECTED = json.loads(r'''{"capability/balanced-style-examples":"78024c0b280f9329c21b54a4bf8141fd4bc7643b","capability/genre-templates-no-invented-evidence":"0da5051b630eb6c4b9afa857ee937f4e0efb3727","capability/optional-remote-readback-20261121":"3409456331713f418cdaba9f29377d21e0d7c488","capability/source-evidence-ledger-20261121":"faff68f4985fe4ce671fdbdccc1da249c7b54879","capability/turkish-author-voice-prompt-20261121":"2b5464ab1f8026b0e7945dfde4249a7f5e49fea6","capability/url-and-pasted-text-inputs":"6b6990cf51977e143c9b73e1284dd5f14fec726d","ci/default-branch-model-cache-20261121":"6d419b1c4be1c645a24efbce5b460b829457e3ef","dependabot/github_actions/actions/upload-artifact-7":"9744ecb1635bac54d8e11b1bec378a44541d6576","docs/align-studio-core-cli-20261107":"83e62506a93cfd77629adcb15a97560f9730022a","docs/final-acceptance-evidence-alignment-20261121":"5fb836e6b5600e83887a6afbf565736a7a8d6aec","docs/final-product-acceptance-evidence-20261121":"fe503cde2f1ea3ca353bf3d4005110164c9f37b8","docs/operator-grade-onboarding":"7bdc53756ffaacadac1f6ca8a3f049a67e8ebdb3","docs/record-repeated-product-fidelity-outcomes-20261121":"4fd17e69e3cd7105d1ec9842e0287309700c94a3","docs/refine-direct-concise":"7d93ddab7becde55f2ea2f2afc2b57328bb8bde1","feat/pennovia-brand-20261107":"1d24c00e112d771549873991f67ed48a799d647e","feat/standalone-public-quality-baseline-20261107":"45bb768418a81b08eb0f48b82f75475ea08cfaaf","feature/pennovia-studio-local":"bbef88849c7b95eab91d787e89d3070cf7efb3be","fix/codex-readonly-execution":"881f38ef809b1e972f6cf2f7c443b0d0abdfe372","fix/continue-valid-mixed-writing-inputs":"b7d0f395e5e2afd7b45ab187e9be480bf827223d","fix/faithful-voice-prompt":"c83b70abd53ba540665869b76528babb13ebcb5d","fix/safe-unique-exports":"cafb52142e601b0621233af99540f2bc70f328d7","fix/short-sentence-rhythm":"1c655be6f8e6ec8568ed79a7ed7c903c7845014c","fix/state-transition-integrity":"6abbde72f6c08321698e7548034deb1837281ae2","fix/transition-token-boundaries":"be83e18c74864dba1479a1a774300029e41b93e3","hardening/public-url-transport":"790e28934d25fe578ab6bf079741da040ebf786d","maintenance/readme-review-alpha":"571a8b3cabce72456ee1fd9fc16f1b96d2a160d5","quality/consistent-first-person-metric":"b485d230f08a67ec821c846ac9051d125e0562a3","quality/corpus-contract-and-cli-errors":"5ab09ae4cfde967deb9149dc1d7ffd3ca25f4f77","quality/corpus-vocabulary-boundaries":"a7fdc09ac347deae112e3cb4ad81cfb87adc85de","quality/coverage-and-dependency-maintenance":"9e00e33976a50e400444956f61ce459e9b0db949","quality/distribution-wheel-smoke":"1a6b05d4ddafad93ca10ddbea6437b38b376c892","quality/explicit-export-format-contract":"1e1b0c81e2af04d20ded0bd913a29c6573d7dad4","quality/explicit-language-evidence":"367395d85c47f1b8fae91f90f5b9608d10294bef","quality/fail-closed-run-publication-20261121":"e029bbefbb9467174d38744fe5a8b3249d94b6b5","quality/honest-style-review-gates":"f08b3aa1419789ac36f950aaae33c8047853f0d3","quality/language-mismatch-review-20261121":"8fc6cee1dd97d084094198080ea620036b751c47","quality/negative-rate-semantics":"9d09c7b6883bb535db2cca63528d1bee27ccb615","quality/ollama-completion-integrity-20261121":"a989a2fb6324a6f9141eda76668444c92c0d9b8f","quality/ollama-local-proxy-boundary-20261121":"a977ac101df30833f69a04cf243158ec13d219d8","quality/paired-real-voice-acceptance-20261121":"c5136d9fbe3f95d55f2fd818561ab96359d7343c","quality/permanent-ci-cache-20261121":"31ff57ef18c21f18f6f8cd03d225137fb7e62978","quality/prevent-silent-cli-overwrites":"dd79644f1d097834e112ced15ac624f01d615b67","quality/private-atomic-output":"beb5243c992fcdbf31a987e9910e775559904680","quality/provider-response-boundaries":"9f629910c6968969a82e6cc27d936a2c539a7845","quality/reject-degenerate-output-and-honest-comparisons-20261121":"1b37c4aef1822fc3272a1822d89badea287586b8","quality/static-checks-and-clean-imports":"24a2c6c5491279c7cc9c31a783915f24eccde127","quality/studio-readable-ui-proof":"e8460ca9471be78c00c86b8144d68575b1da5726","quality/studio-real-browser-smoke":"49fff6b1bf3a9547622e89c6b42b65dba0799f6d","quality/voice-profile-contract":"9fc87397eadcd2793268eed14b22cb701d4c64f1","real-history-v3":"21fd7e7c24782b51f38958998370d08d0aed21f2","refactor/focused-core-studio-quality":"711e1f404aacf1781ff3deb41b0103ee10813e17","release/real-ollama-alpha-proof":"db29bbe2a13b54d026fef6a991902618c535e8e2","security/untrusted-style-evidence":"3a15ca0947054363edd3f138ccadfc89ade7f591","security/wordpress-export-fail-closed":"9265c935e5497ff481501864dbba1948895af995","test/synthetic-real-pipeline":"b4f8580420f5d78f180f52b3e6334e4a51f8f8f2"}''')
+          CLEANUP = "maintenance/one-time-branch-hygiene-20261121"
+            
+          def api(path, method="GET"):
+              req = urllib.request.Request(
+                  ROOT + path, method=method,
+                  headers={"Authorization": "Bearer " + TOKEN,
+                           "Accept": "application/vnd.github+json",
+                           "X-GitHub-Api-Version": "2022-11-28",
+                           "User-Agent": "pennovia-branch-hygiene"})
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  body = response.read()
+                  return json.loads(body) if body else None
+            
+          repo = api("")
+          assert repo["default_branch"] == "main", "default branch changed"
+          branches = api("/branches?per_page=100")
+          assert len(branches) < 100, "pagination required; refusing cleanup"
+          seen = {b["name"]: b["commit"]["sha"] for b in branches}
+          assert "main" in seen
+          allowed = set(EXPECTED) | {CLEANUP, "main"}
+          assert not (set(seen) - allowed), "unrecognized branch; no writes"
+          for name, sha in EXPECTED.items():
+              if name in seen:
+                  assert seen[name] == sha, "branch head moved: " + name
+            
+          prs = api("/pulls?state=all&per_page=100")
+          assert len(prs) < 100, "PR pagination required; refusing cleanup"
+          assert not any(p["state"] == "open" for p in prs), "an open PR exists; refusing cleanup"
+          by_branch = {p["head"]["ref"]: p for p in prs
+                       if p["head"]["repo"] and p["head"]["repo"]["full_name"] == repo["full_name"]}
+          for name in EXPECTED:
+              if name == "real-history-v3":
+                  assert name not in by_branch, "legacy branch unexpectedly has a PR"
+              elif name == "capability/turkish-author-voice-prompt-20261121":
+                  pr = by_branch[name]
+                  assert pr["number"] == 53 and pr["state"] == "closed" and not pr["merged_at"]
+              else:
+                  pr = by_branch[name]
+                  assert pr["merged_at"] and pr["state"] == "closed", "not merged: " + name
+          assert by_branch.get(CLEANUP, {}).get("merged_at"), "cleanup PR not merged"
+          targets = sorted((set(seen) - {"main"}) & allowed)
+          assert len(targets) >= 1, "no candidates"
+          print("Preflight OK; stale branches targeted:", len(targets), flush=True)
+          for name in targets:
+              path = "/git/refs/" + urllib.parse.quote("heads/" + name, safe="/")
+              api(path, method="DELETE")
+              print("Deleted:", name, flush=True)
+          remaining = api("/branches?per_page=100")
+          assert [b["name"] for b in remaining] == ["main"], "cleanup not complete"
+          print("Branch cleanup verified: only main remains", flush=True)
+            
+          PY
