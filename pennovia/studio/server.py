@@ -83,12 +83,14 @@ def _summary(profile: VoiceProfile) -> dict:
     }
 
 
-def _review(draft: str, profile: VoiceProfile) -> dict:
+def _review(draft: str, profile: VoiceProfile, fact_packet=None) -> dict:
     from pennovia.audit import audit
     from pennovia.voice.scorer import score
+    from pennovia.voice.facts import FactPacket
 
     result = audit(draft, profile)
-    return {
+    evidence = FactPacket.from_data(fact_packet) if fact_packet is not None else None
+    payload = {
         "score": result.total_score,
         "passed": result.passed(),
         "similarity": score(draft, profile),
@@ -101,6 +103,13 @@ def _review(draft: str, profile: VoiceProfile) -> dict:
             "No clichés": result.no_ai_cliches,
         },
     }
+    if evidence is not None:
+        payload["factual_sources"] = evidence.review_references(draft)
+        payload["passed"] = False  # No independently verified factual content.
+        payload["issues"].append("source_facts_not_independently_verified")
+        if payload["factual_sources"]["unknown_ids"]:
+            payload["issues"].append("unknown_fact_reference")
+    return payload
 
 
 def _analyze_request(payload: dict) -> dict:
@@ -140,13 +149,20 @@ def _generate_request(payload: dict, profile: VoiceProfile) -> dict:
     if backend == "codex" and model.strip():
         raise ValueError("Codex CLI does not accept a model override")
     options = {"model": model.strip()} if model.strip() else {}
+    facts = payload.get("fact_packet")
+    if facts not in (None, ""):
+        from pennovia.voice.facts import FactPacket
+        packet = FactPacket.from_data(facts)
+        options["fact_packet"] = facts
+    else:
+        packet = None
     request_receipt = backend in ("ollama", "auto")
     generated = generate(
         profile, kind, topic, backend=backend,
         **({"return_metadata": True} if request_receipt else {}), **options
     )
     if isinstance(generated, OllamaGeneration):
-        review = _review(generated.text, profile)
+        review = _review(generated.text, profile, facts if packet else None)
         if generated.completion_status != "complete":
             review["passed"] = False
             issue = ("generation_truncated" if generated.completion_status == "truncated"
@@ -158,7 +174,7 @@ def _generate_request(payload: dict, profile: VoiceProfile) -> dict:
             "generated_tokens": generated.generated_tokens,
             "prompt_tokens": generated.prompt_tokens,
         }}
-    return {"draft": generated, "review": _review(generated, profile)}
+    return {"draft": generated, "review": _review(generated, profile, facts if packet else None)}
 
 
 def _download_draft(draft: str, title: str, fmt: str) -> tuple[str, bytes, str]:
@@ -216,7 +232,8 @@ def _handle_api(path: str, payload: dict) -> dict | tuple[str, bytes, str]:
         return _generate_request(payload, profile)
     draft = _required_string(payload, "draft", limit=1_000_000)
     if path == "/api/review":
-        return _review(draft, profile)
+        fact_packet = payload.get("fact_packet")
+        return _review(draft, profile, fact_packet if fact_packet not in (None, "") else None)
     return _export_request(payload, draft)
 
 
