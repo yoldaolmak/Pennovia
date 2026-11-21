@@ -143,6 +143,10 @@ url: str = save_wordpress(content, title,
 
 WordPress requires a canonical HTTPS base URL. Redirects and invalid responses are rejected; network failures raise `RuntimeError`.
 
+### One-command direct WordPress publication safety
+
+`pennovia run --dest wordpress --publish` now requests the optional local Ollama completion receipt before attempting the remote write. A known token-budget cutoff or unknown completion, or clear draft-integrity failures (too short, unresolved factual placeholders, wrong output language, severe repetition), block **direct publication before the WordPress request**. A completed result does **not** prove factual accuracy, source evidence, author resemblance, or editorial approval. Use local draft export, check facts and the author's intended voice, then explicitly publish the edited version with `pennovia export --input ... --dest wordpress --publish`. Ordinary local export and WordPress *draft* creation remain available for editing, including incomplete content with an explicit warning. `--publish` has no meaning for non-WordPress destinations and is rejected on the `run` path.
+
 ### CLI export format contract
 
 Local/Drive: TXT, HTML or PDF (comma-separated formats allowed). WordPress: one HTML output only. Local `run` defaults to HTML+TXT; WordPress `run` defaults to HTML.
