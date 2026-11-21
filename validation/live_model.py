@@ -20,6 +20,7 @@ from pennovia.voice.generator import generate
 from pennovia.voice.scorer import score
 
 SOURCE = "https://www.gutenberg.org/cache/epub/3176/pg3176.txt"
+MIRROR = "https://raw.githubusercontent.com/GITenberg/The-Innocents-Abroad_3176/master/3176-0.txt"
 MODEL = "qwen2.5:1.5b"
 OLLAMA = "http://127.0.0.1:11434"
 TOPICS = (
@@ -65,16 +66,26 @@ def select_chapters(book: str) -> dict[str, str]:
     return pieces
 
 
-def _download_source() -> tuple[str, str]:
-    response = requests.get(SOURCE, timeout=(10, 45))
-    response.raise_for_status()
-    if len(response.content) > 3_000_000:
-        raise RuntimeError("Gutenberg source exceeds the expected size")
-    raw = response.content
-    # Gutenberg plaintext may use CRLF. Normalize line endings for
-    # chapter boundaries while hashing the original bytes for provenance.
-    text = raw.decode("utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
-    return text, hashlib.sha256(raw).hexdigest()
+def _download_source() -> tuple[str, str, str]:
+    """Prefer Gutenberg; accept only its independently checked GITenberg mirror.
+
+    A transient origin failure must not force the acceptance experiment to
+    use an unrelated or synthetic corpus. Record which exact URL served it.
+    """
+    for source in (SOURCE, MIRROR):
+        try:
+            response = requests.get(source, timeout=(10, 45))
+            response.raise_for_status()
+            raw = response.content
+            if not raw or len(raw) > 3_000_000:
+                raise ValueError("Unexpected source size")
+            # Normalize line endings only after hashing the downloaded bytes.
+            text = raw.decode("utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
+            select_chapters(text)
+            return text, hashlib.sha256(raw).hexdigest(), source
+        except (requests.RequestException, ValueError, UnicodeError):
+            continue
+    raise RuntimeError("Neither the Gutenberg source nor its GITenberg mirror passed verification")
 
 
 def _model_digest() -> str:
@@ -127,10 +138,10 @@ def main() -> None:
     out = args.output
     out.mkdir(parents=True, exist_ok=True)
 
-    book, source_sha256 = _download_source()
+    book, source_sha256, source_url = _download_source()
     chapters = select_chapters(book)
     if args.source_only:
-        print(json.dumps({"source_sha256": source_sha256,
+        print(json.dumps({"source_url": source_url, "source_sha256": source_sha256,
                           "chapters": list(chapters),
                           "word_counts": {k: len(v.split()) for k, v in chapters.items()}}))
         return
@@ -180,7 +191,7 @@ def main() -> None:
     report = {
         "status": "real_model_executed",
         "created_utc": datetime.now(timezone.utc).isoformat(),
-        "source": SOURCE,
+        "source": source_url,
         "source_sha256": source_sha256,
         "training_chapters": ["I", "II", "IV"],
         "held_out_chapter": "III",

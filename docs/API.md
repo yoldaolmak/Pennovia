@@ -82,10 +82,11 @@ content: str = generate(
     topic="A weekend in Lisbon",
     backend="ollama",            # or openai, anthropic, openrouter, codex, auto
     # model="llama3",            # optional: match the chosen provider
+    # max_tokens=640,          # optional Ollama-only bound (64–8192)
 )
 ```
 
-`auto` selects Anthropic → OpenRouter → OpenAI → Ollama based on configured credentials. CLI supports `PENNOVIA_BACKEND`; Studio defaults to local Ollama. A `model` override must match the provider; Codex CLI does not accept one.
+`auto` selects Anthropic → OpenRouter → OpenAI → Ollama based on configured credentials. CLI supports `PENNOVIA_BACKEND`; Studio defaults to local Ollama. A `model` override must match the provider; Codex CLI does not accept one. `max_tokens` is an optional Python API override for local Ollama only; omitted values preserve existing model defaults. It is used by controlled comparisons to give each arm the same finite decoding budget.
 
 ## audit
 
@@ -100,7 +101,7 @@ result.transition_match  # int 0–20
 result.style_match    # int 0–20
 result.no_ai_cliches  # int 0–20
 result.issues         # list[str]
-result.passed()       # bool: score >= 70 AND text is at least 200 words; not calibrated
+result.passed()       # bool: score >= 70, at least 200 words, no recognised unresolved placeholders; not calibrated
 result.report()       # str — formatted report
 ```
 

@@ -43,3 +43,34 @@ def test_crlf_normalization_matches_gutenberg_download_format():
     raw = _fake_book().replace("\n", "\r\n").encode("utf-8")
     decoded = raw.decode("utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
     assert len(select_chapters(decoded)) == 4
+
+
+def test_gutenberg_mirror_fallback_is_source_verified_and_attributed(monkeypatch):
+    import hashlib
+    import requests
+
+    from validation import live_model
+
+    book = _fake_book().encode("utf-8")
+    urls = []
+
+    class Response:
+        content = book
+
+        def raise_for_status(self):
+            pass
+
+    def fake_get(url, **kwargs):
+        urls.append(url)
+        if url == live_model.SOURCE:
+            raise requests.HTTPError("Synthetic Gutenberg 503")
+        return Response()
+
+    monkeypatch.setattr(live_model.requests, "get", fake_get)
+    text, digest, source = live_model._download_source()
+    assert source == live_model.MIRROR
+    assert digest == hashlib.sha256(book).hexdigest()
+    assert text == book.decode("utf-8")
+    assert urls == [live_model.SOURCE, live_model.MIRROR]
+    assert set(live_model.select_chapters(text)) == {"I", "II", "III", "IV"}
+
