@@ -10,6 +10,31 @@ from pennovia.voice.analyzer import VoiceProfile
 
 PROFILE = VoiceProfile(language="en")
 
+def _mock_ollama_session(monkeypatch, response_fn, exception_type):
+    """Assert local inference cannot inherit proxy or netrc configuration."""
+    class Session:
+        def __init__(self):
+            self.trust_env = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def post(self, url, *, json, timeout):
+            assert self.trust_env is False
+            assert url == "http://127.0.0.1:11434/api/chat"
+            assert timeout == 300
+            assert json["stream"] is False
+            return response_fn()
+
+    monkeypatch.setitem(
+        sys.modules, "requests",
+        SimpleNamespace(Session=Session, RequestException=exception_type),
+    )
+
+
 
 def test_blank_and_nontext_responses_are_not_drafts():
     for value in (None, "", "   ", [], {}):
@@ -27,10 +52,7 @@ def test_ollama_rejects_empty_and_malformed_json(monkeypatch):
         def json(self):
             return {"message": {"content": "   "}}
 
-    monkeypatch.setitem(
-        sys.modules, "requests",
-        SimpleNamespace(post=lambda *a, **kw: Response(), RequestException=FakeRequestError),
-    )
+    _mock_ollama_session(monkeypatch, Response, FakeRequestError)
     with pytest.raises(RuntimeError, match="no usable draft"):
         generator.generate_ollama(PROFILE, "story", "Topic")
 
@@ -40,14 +62,31 @@ def test_ollama_network_failure_is_actionable_without_echoing_secrets(monkeypatc
         pass
     def fail(*args, **kwargs):
         raise FakeRequestError("authorization-token-secret")
-    monkeypatch.setitem(
-        sys.modules, "requests",
-        SimpleNamespace(post=fail, RequestException=FakeRequestError),
-    )
+    _mock_ollama_session(monkeypatch, fail, FakeRequestError)
     with pytest.raises(RuntimeError, match="Ollama request failed") as exc:
         generator.generate_ollama(PROFILE, "story", "Topic")
     assert "authorization-token-secret" not in str(exc.value)
 
+
+
+def test_local_ollama_never_uses_ambient_proxy_settings(monkeypatch):
+    monkeypatch.setenv("HTTP_PROXY", "http://proxy.invalid:8080")
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:8080")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.delenv("no_proxy", raising=False)
+
+    class FakeRequestError(Exception):
+        pass
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"message": {"content": "Private local draft"}}
+
+    _mock_ollama_session(monkeypatch, Response, FakeRequestError)
+    assert generator.generate_ollama(PROFILE, "story", "Topic") == "Private local draft"
 
 def test_openrouter_malformed_reply_is_rejected(monkeypatch):
     class FakeRequestError(Exception):
