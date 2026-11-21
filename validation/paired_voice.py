@@ -19,7 +19,10 @@ from bs4 import BeautifulSoup
 from pennovia.content_types.registry import get as get_type
 from pennovia.voice.analyzer import _detect_language, analyze
 from pennovia.voice.generator import _require_draft, generate
-from validation.live_model import MODEL, OLLAMA, _model_digest, _download_source, select_chapters
+if __package__:
+    from .live_model import MODEL, OLLAMA, _model_digest, _download_source, select_chapters
+else:
+    from live_model import MODEL, OLLAMA, _model_digest, _download_source, select_chapters
 
 
 TURKISH_STORIES = (
