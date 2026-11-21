@@ -42,7 +42,7 @@ def test_correct_language_and_unknown_evidence_do_not_fail_closed():
 
     # An ambiguous answer should not be called English purely because the
     # profile is Turkish: the review remains uncertain, not deceptively sure.
-    ambiguous = audit(("Kapadokya İstanbul Ankara. " * 90), analyze([TR], language="tr"))
+    ambiguous = audit(("Cappadocia Istanbul Ankara. " * 90), analyze([TR], language="tr"))
     assert ambiguous.details["observed_language"] == "auto"
     assert "output_language_mismatch" not in ambiguous.issues
 
