@@ -122,3 +122,49 @@ def test_neutral_model_run_is_local_and_proxy_free(monkeypatch):
 
     monkeypatch.setattr(paired.requests, "Session", MockSession)
     assert paired._neutral("An original scene.", "en") == "A complete neutral draft."
+
+
+def test_incomplete_generation_is_ineligible_even_if_style_distance_looks_better():
+    heldout = " ".join(
+        f"The {chr(97 + i)} traveler considered {chr(97 + i)} options "
+        f"before {chr(97 + i)} crossings as the evening approached."
+        for i in range(23)
+    )
+    case = paired.Case("case-en", "Writer", "en", ("Source paragraph.",), heldout, ())
+    result = paired.evaluate_pair(
+        heldout, heldout + " Extra detail.", case,
+        styled_completion="truncated", neutral_completion="unknown",
+    )
+    assert result["styled_completion_status"] == "truncated"
+    assert result["neutral_completion_status"] == "unknown"
+    assert "styled_generation_truncated" in result["invalid_reasons"]
+    assert "neutral_generation_unknown" in result["invalid_reasons"]
+    assert not result["eligible_for_style_comparison"]
+    assert result["styled_better_on_descriptive_distance"] is None
+
+
+def test_neutral_optional_receipt_exposes_model_length_cutoff(monkeypatch):
+    class Session:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def post(self, url, **kwargs):
+            assert not self.trust_env
+            return SimpleNamespace(
+                raise_for_status=lambda: None,
+                json=lambda: {
+                    "message": {"content": "A usable but unfinished text"},
+                    "done_reason": "length",
+                    "eval_count": paired.MAX_TOKENS,
+                },
+            )
+
+    monkeypatch.setattr(paired.requests, "Session", Session)
+    receipt = paired._neutral("A fictional scene.", "en", return_metadata=True)
+    assert receipt.text == "A usable but unfinished text"
+    assert receipt.completion_status == "truncated"
+    assert receipt.generated_tokens == paired.MAX_TOKENS
+    assert paired._neutral("A fictional scene.", "en") == receipt.text
