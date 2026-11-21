@@ -19,6 +19,7 @@ from bs4 import BeautifulSoup
 from pennovia.content_types.registry import get as get_type
 from pennovia.voice.analyzer import _detect_language, analyze
 from pennovia.voice.generator import _require_draft, generate
+from pennovia.voice.integrity import repeated_fourgram_share
 if __package__:
     from .live_model import MODEL, OLLAMA, _model_digest, _download_source, select_chapters
 else:
@@ -204,23 +205,49 @@ def copied_long_span(draft: str, training: tuple[str, ...], *, size: int = 12) -
 
 
 def evaluate_pair(styled: str, neutral: str, case: Case) -> dict:
+    """Record diagnostics for every pair; never count a non-comparable win."""
     styled_words, neutral_words = len(styled.split()), len(neutral.split())
     if not styled_words or not neutral_words:
         raise ValueError("Empty model output")
     ratio = styled_words / neutral_words
     comparable = 0.6 <= ratio <= 1.67
+    styled_language, neutral_language = _detect_language(styled), _detect_language(neutral)
     styled_distance = heldout_distance(styled, case.held_out, case.language)
     neutral_distance = heldout_distance(neutral, case.held_out, case.language)
+    styled_copy = copied_long_span(styled, case.training)
+    neutral_copy = copied_long_span(neutral, case.training)
+    styled_repeated, _, styled_tokens = repeated_fourgram_share(styled)
+    neutral_repeated, _, neutral_tokens = repeated_fourgram_share(neutral)
+
+    reasons = []
+    if not comparable:
+        reasons.append("incomparable_lengths")
+    if min(styled_words, neutral_words) < 120:
+        reasons.append("insufficient_output_length")
+    if styled_language != case.language or neutral_language != case.language:
+        reasons.append("unverified_output_language")
+    if styled_copy or neutral_copy:
+        reasons.append("verbatim_source_copy")
+    if ((styled_tokens >= 120 and styled_repeated >= 0.45)
+            or (neutral_tokens >= 120 and neutral_repeated >= 0.45)):
+        reasons.append("severe_text_repetition")
+
+    eligible = not reasons
     return {
         "styled_words": styled_words, "neutral_words": neutral_words,
         "length_ratio": round(ratio, 3), "length_comparable": comparable,
-        "styled_language": _detect_language(styled),
-        "neutral_language": _detect_language(neutral),
+        "styled_language": styled_language, "neutral_language": neutral_language,
         "styled_heldout_distance": styled_distance,
         "neutral_heldout_distance": neutral_distance,
-        "styled_better_on_descriptive_distance": styled_distance < neutral_distance,
-        "styled_12gram_source_copy": copied_long_span(styled, case.training),
-        "neutral_12gram_source_copy": copied_long_span(neutral, case.training),
+        "styled_better_on_descriptive_distance": (
+            styled_distance < neutral_distance if eligible else None
+        ),
+        "styled_12gram_source_copy": styled_copy,
+        "neutral_12gram_source_copy": neutral_copy,
+        "styled_repeated_fourgram_share": styled_repeated,
+        "neutral_repeated_fourgram_share": neutral_repeated,
+        "eligible_for_style_comparison": eligible,
+        "invalid_reasons": reasons,
     }
 
 

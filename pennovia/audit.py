@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import re
 from .voice.analyzer import (VoiceProfile, _sentences, _transition_count,
                              _first_person_rate, _detect_language)
+from .voice.integrity import repeated_fourgram_share
 
 
 @dataclass
@@ -23,7 +24,8 @@ class AuditResult:
         return (self.total_score >= 70
                 and "too_short" not in self.issues
                 and "unresolved_placeholder" not in self.issues
-                and "output_language_mismatch" not in self.issues)
+                and "output_language_mismatch" not in self.issues
+                and "severe_text_repetition" not in self.issues)
 
     def report(self) -> str:
         status = "PASS" if self.passed() else "FAIL"
@@ -140,6 +142,18 @@ def audit(content: str, profile: VoiceProfile) -> AuditResult:
     if (profile.language in ("tr", "en") and observed_language in ("tr", "en")
             and observed_language != profile.language and len(content.split()) >= 50):
         issues.append("output_language_mismatch")
+
+    # A raw voice similarity score can appear high on incoherent loops.
+    # Only substantial, severely repeated outputs become blocking; lesser
+    # repetition is a human-edit warning, not an authorship judgment.
+    repeated_share, repeated_max, repetition_words = repeated_fourgram_share(content)
+    details["repeated_fourgram_share"] = repeated_share
+    details["max_fourgram_occurrences"] = repeated_max
+    if repetition_words >= 120 and profile.vocabulary_richness >= 0.25:
+        if repeated_share >= 0.45:
+            issues.append("severe_text_repetition")
+        elif repeated_share >= 0.15:
+            issues.append("formulaic_repetition_warning")
 
     # Minimum length check
     word_count = len(content.split())

@@ -50,9 +50,47 @@ def test_pair_comparison_has_length_and_language_disclosures():
     assert result["length_comparable"]
     assert result["styled_language"] == "tr"
     assert result["styled_heldout_distance"] == result["neutral_heldout_distance"]
-    assert not result["styled_better_on_descriptive_distance"]
+    assert not result["eligible_for_style_comparison"]
+    assert "severe_text_repetition" in result["invalid_reasons"]
+    assert result["styled_better_on_descriptive_distance"] is None
     result = paired.evaluate_pair(sample, "Tek kelime.", case)
     assert not result["length_comparable"]
+    assert "incomparable_lengths" in result["invalid_reasons"]
+    assert "insufficient_output_length" in result["invalid_reasons"]
+    assert result["styled_better_on_descriptive_distance"] is None
+
+
+
+def test_wrong_language_is_ineligible_even_if_distance_is_better():
+    tr = " ".join(
+        f"Bugün burada {chr(97 + i)} kararı verdim ve sonra dinlendim."
+        for i in range(23)
+    )
+    en = " ".join(
+        f"The traveler explored region {chr(97 + i)} and returned after sunset."
+        for i in range(23)
+    )
+    case = paired.Case("case-tr", "Writer", "tr", (tr,), tr, ())
+    result = paired.evaluate_pair(en, tr, case)
+    assert result["styled_language"] == "en"
+    assert not result["eligible_for_style_comparison"]
+    assert "unverified_output_language" in result["invalid_reasons"]
+    assert result["styled_better_on_descriptive_distance"] is None
+
+
+def test_eligible_pair_can_have_a_real_comparison_without_assumed_superiority():
+    heldout = " ".join(
+        f"The {chr(97 + i)} traveler considered {chr(97 + i)} options "
+        f"before {chr(97 + i)} crossings as the evening approached."
+        for i in range(23)
+    )
+    case = paired.Case("case-en", "Writer", "en",
+                       ("This training passage has a different structure.",),
+                       heldout, ())
+    controlled = paired.evaluate_pair(heldout, heldout + " Extra detail.", case)
+    assert controlled["eligible_for_style_comparison"]
+    assert controlled["styled_better_on_descriptive_distance"] is True
+    assert controlled["invalid_reasons"] == []
 
 
 def test_fixed_source_allowlist_rejects_unapproved_url_without_network(monkeypatch):
