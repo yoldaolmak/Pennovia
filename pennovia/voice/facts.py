@@ -5,6 +5,7 @@ the live source contains the excerpt or that the claim is true. This module
 never fetches, authenticates, or promotes source content to model authority.
 """
 from dataclasses import dataclass
+import hashlib
 import ipaddress
 import json
 import re
@@ -69,6 +70,9 @@ class FactPacket:
                 value = json.loads(value)
             except (ValueError, TypeError) as exc:
                 raise ValueError("Fact packet must be valid JSON") from exc
+        if isinstance(value, dict):
+            if len(json.dumps(value, ensure_ascii=False)) > 18_000:
+                raise ValueError("Fact packet is too large")
         if not isinstance(value, dict) or set(value) != {"facts"}:
             raise ValueError("Fact packet must contain only a facts array")
         items = value["facts"]
@@ -104,6 +108,48 @@ class FactPacket:
               "it [F1], [F2], etc. Do not invent a source or firsthand experience. "
               "This packet has NOT been independently source-checked."
         )
+
+    def check_source_excerpts(self, fetch=None) -> list[dict]:
+        """Check actual excerpt occurrence through the SSRF-safe article reader.
+
+        A match is a source-excerpt observation, NEVER proof the author's
+        paraphrased claim is true. Returns only IDs and hashes, no excerpts.
+        """
+        if fetch is None:
+            from pennovia.ingestion.reader import read_url
+            fetch = read_url
+
+        def normalized(value: str) -> str:
+            return " ".join(value.casefold().split())
+
+        outcomes = []
+        # Each source URL may be reused; do not repeatedly request the same
+        # remote article or change a verified excerpt to a later revision.
+        cache = {}
+        for fact in self.facts:
+            if fact.source_url not in cache:
+                try:
+                    document = fetch(fact.source_url)
+                    if not isinstance(document, str):
+                        raise ValueError("Source did not return text")
+                    cache[fact.source_url] = document
+                except (OSError, RuntimeError, ValueError):
+                    cache[fact.source_url] = None
+            document = cache[fact.source_url]
+            excerpt_found = (
+                isinstance(document, str)
+                and normalized(fact.source_excerpt) in normalized(document)
+            )
+            outcomes.append({
+                "id": fact.id,
+                "source_excerpt_found": excerpt_found,
+                "source_text_sha256": (
+                    hashlib.sha256(document.encode("utf-8")).hexdigest()
+                    if isinstance(document, str) else None
+                ),
+                "claim_truth_verified": False,
+            })
+        return outcomes
 
     def review_references(self, draft: str) -> dict:
         """Check citation-token integrity, not whether prose is factually true."""
