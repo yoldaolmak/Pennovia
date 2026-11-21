@@ -28,9 +28,24 @@ The [7 November 2026 release run](https://github.com/yoldaolmak/Pennovia/actions
 
 The neutral control scored higher. This verifies execution, **not** an advantage in writer-style fidelity. The tagged [alpha release](https://github.com/yoldaolmak/Pennovia/releases/tag/v0.2.0) was published only after the separate live-model job, six main-branch CI checks and package-build verification succeeded.
 
+## Paired bilingual author-voice experiment (quality acceptance)
+
+`validation/paired_voice.py` extends the actual local Ollama run, with no cloud keys or mock model responses. It compares two original-author cases, in English and Turkish, with separate training and held-out writing:
+
+- Mark Twain: chapters I, II and IV of *The Innocents Abroad* for training; chapter III held out. The original Project Gutenberg source or its validated public GITenberg mirror is hashed, and the exact downloaded URL is recorded.
+- Ömer Seyfettin: Wikisource originals *Velinimet* and *Nâdan* for training, *Tos* held out; each remote source's byte hash and reuse basis are recorded.
+
+For each case, two fictional story prompts are run twice with the same local model and genre: once with Pennovia's voice profile, once with a neutral control. Independent *descriptive* held-out distances compare eight observable stylistic features without using the product's own `audit()` or `score()` functions. Output-language and word-count comparability are reported, and exact 12-word source spans are flagged. This diagnostic is **not calibrated author recognition** or editorial quality.
+
+The archived `pennovia-paired-voice-evidence` artifact contains the actual outputs under randomized A/B filenames, a separate answer key, source hashes and a blank blind-review form. A reviewer must score voice resemblance, readability and unsupported claims **without first looking at the answer key**. The form being generated does not mean anyone completed an independent review. No superiority or full product acceptance claim may be made without sufficient paired outcomes, independent judgment and failure-case analysis.
+
+## Editorial output integrity
+
+An `audit().passed()` result now also rejects recognisable unfinished factual placeholders (for example `[Taxi Fare]`, `[Attraction1]` or `____`) even if the voice heuristic would exceed 70/100. This is an intentional, high-confidence warning gate, **not** a comprehensive factual verifier. Automatic scoring cannot establish that transportation times, prices, sources or claimed firsthand experiences are true. The author must verify such claims and approve drafts before publication.
+
 ## How to interpret a score
 
-Audit PASS requires **70/100 and at least 200 words**. It compares sentence rhythm, first-person rate, questions, transitions, paragraph structure and common AI clichés. Different writers can receive similar scores.
+Audit PASS requires **70/100, at least 200 words, and no recognised unresolved placeholders**. It compares sentence rhythm, first-person rate, questions, transitions, paragraph structure and common AI clichés. Different writers can receive similar scores.
 
 Turkish negation detection covers only listed forms, not every inflected verb. Vocabulary richness uses 500-token windows; recurring phrases do not cross document boundaries. These are descriptive signals, not identity tests.
 
