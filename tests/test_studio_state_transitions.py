@@ -201,3 +201,45 @@ def test_uncertain_remote_submission_requires_explicit_retry_confirmation(monkey
         page.locator("#wordpress").click()
         assert len(calls) == 2
         browser.close()
+
+
+def test_incomplete_ollama_draft_remains_editable_and_cannot_be_reapproved_unchanged(monkeypatch):
+    def incomplete_generate(*args, **kwargs):
+        assert kwargs.get("return_metadata") is True
+        return generator.OllamaGeneration(
+            text=DRAFT, completion_status="truncated", done_reason="length",
+            prompt_tokens=350, generated_tokens=640,
+        )
+
+    monkeypatch.setattr(generator, "generate", incomplete_generate)
+    with local_studio() as base, playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch()
+        page = browser.new_page()
+        page.goto(base)
+        _ready(page)
+        page.locator("#backend").select_option("ollama")
+        page.locator("#topic").fill("A fictional scene")
+        page.locator("#generate").click()
+        page.wait_for_function(
+            "() => document.querySelector('#review-verdict').textContent.includes('token limit')"
+        )
+        assert page.locator("#draft").input_value() == DRAFT
+        assert page.locator("#draft").is_enabled()
+        assert "generation_truncated" in page.locator("#review-issues").inner_text()
+
+        # Without an edit, re-running the text-only heuristic must not erase
+        # the actual provider cutoff receipt.
+        page.locator("#review").click()
+        page.wait_for_function(
+            "() => document.querySelector('#review-verdict').textContent.includes('token limit')"
+        )
+        assert "generation_truncated" in page.locator("#review-issues").inner_text()
+
+        # After a real user edit, a new review concerns edited text.
+        page.locator("#draft").fill(DRAFT + " A completed closing sentence.")
+        page.locator("#review").click()
+        page.locator("#review-results").wait_for(state="visible")
+        page.wait_for_function(
+            "() => !document.querySelector('#review-verdict').textContent.includes('token limit')"
+        )
+        browser.close()
