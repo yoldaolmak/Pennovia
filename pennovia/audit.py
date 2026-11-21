@@ -3,6 +3,7 @@ Voice audit — scores generated content against the source voice profile.
 No LLM required. Pure statistical comparison.
 """
 from dataclasses import dataclass
+import re
 from .voice.analyzer import VoiceProfile, _sentences, _transition_count, _first_person_rate
 
 
@@ -18,7 +19,9 @@ class AuditResult:
 
     def passed(self) -> bool:
         """A high heuristic score cannot override insufficient text evidence."""
-        return self.total_score >= 70 and "too_short" not in self.issues
+        return (self.total_score >= 70
+                and "too_short" not in self.issues
+                and "unresolved_placeholder" not in self.issues)
 
     def report(self) -> str:
         status = "PASS" if self.passed() else "FAIL"
@@ -32,6 +35,18 @@ class AuditResult:
         if self.issues:
             lines.append(f"  Issues: {', '.join(self.issues)}")
         return "\n".join(lines)
+
+
+# A high style score must not approve text still containing recognisable
+# fill-in markers. This is a deliberately conservative detection rule; it
+# cannot establish factual accuracy or detect all unsupported claims.
+_UNRESOLVED_PLACEHOLDER = re.compile(
+    r"(?<!\\w)_{4,}(?!\\w)|"
+    r"\\[\\s*(?:airport|bus|train|taxi|ticket|hotel|restaurant|place|"
+    r"location|station|fare|price|distance|attraction|month|date|"
+    r"time|name|code|address|route)[a-z0-9 _-]{0,35}\\s*\\]",
+    re.IGNORECASE,
+)
 
 
 AI_CLICHES = [
@@ -110,6 +125,11 @@ def audit(content: str, profile: VoiceProfile) -> AuditResult:
 
     if found_cliches:
         issues.append(f"ai_cliches: {', '.join(found_cliches[:3])}")
+
+    placeholders = _UNRESOLVED_PLACEHOLDER.findall(content)
+    details["unresolved_placeholders"] = len(placeholders)
+    if placeholders:
+        issues.append("unresolved_placeholder")
 
     # Minimum length check
     word_count = len(content.split())
