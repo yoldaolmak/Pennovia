@@ -55,6 +55,12 @@ Thus neither **2/2 English improvement**, nor **reliable Turkish drafting**, nor
 - Severe four-word-sequence looping fails review for a sufficiently long text when the source author profile does not itself exhibit an intentionally tiny vocabulary. Moderately formulaic output receives a visible review note. This structural screen is conservative and **cannot certify semantic coherence**.
 - Paired results now retain raw distances but cannot report a numeric win if either arm is too short, very uneven in length, in the wrong/unknown language, a severe repetition loop or an exact long-span copy.
 
+## Source-evidence ledger candidate (not product accepted)
+
+A new optional, bounded source-fact packet has been introduced separately from the author-voice profile, with explicit `claim`, `source_url`, and `source_excerpt` fields, reference-token diagnostics and an opt-in public HTTPS excerpt match using the existing SSRF-safe reader. The underlying URLs and user-entered text are never silently considered verified; returned results explicitly mark claim truth and firsthand experience as **unverified**. Source facts remain lower-priority, untrusted model inputs. The CLI and Studio expose the packet without modifying VoiceProfile v1.
+
+This enables evidence-aware editorial preparation, not factual claim verification or unattended publication. A source excerpt being found does **not** prove that the generated claim is supported. The pilot's engineering and live-model checks, plus any independent real-source editorial test, must pass before expanding product acceptance. Keep issue #48 open until claim-level verification, actual remote proof and independent human checks exist.
+
 ## Remaining hard acceptance conditions
 
 1. **Author voice, #45:** obtain a sufficiently powered bilingual, multilingual-genre experiment; include actual blind human reviewer judgments and adverse cases. The 2/2 English observation from the first run did not reproduce consistently and does not establish product superiority.

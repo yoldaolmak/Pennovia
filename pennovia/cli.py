@@ -138,6 +138,48 @@ def cmd_analyze(args):
     _ok(f"Profile saved: {out}  ({time.time()-t0:.1f}s)")
 
 
+def _load_fact_packet(path, *, verify=False):
+    """Read source leads; optionally check excerpt occurrence before modeling."""
+    if not path:
+        if verify:
+            raise ValueError("--verify-facts requires --facts-file")
+        return None, None
+    from pennovia.voice.facts import FactPacket
+
+    selected = Path(path)
+    if selected.stat().st_size > 18_000:
+        raise ValueError("Fact packet is too large")
+    raw = selected.read_text(encoding="utf-8")
+    packet = FactPacket.from_data(raw)
+    if verify:
+        checks = packet.check_source_excerpts()
+        if not all(item["source_excerpt_found"] for item in checks):
+            raise ValueError(
+                "At least one factual source excerpt could not be matched; "
+                "no model call was made"
+            )
+        _warn(
+            f"Located {len(checks)} supplied source excerpts on public pages. "
+            "This does NOT verify the facts or firsthand experience."
+        )
+    return raw, packet
+
+
+def _warn_fact_review(packet, content):
+    if packet is None:
+        return
+    result = packet.review_references(content)
+    _warn(
+        f"Factual evidence leads: {result['supplied']} supplied, "
+        f"{len(result['cited_ids'])} cited; neither sources nor claims verified."
+    )
+    if result["unknown_ids"]:
+        _warn("Unknown factual citations: " + ", ".join(result["unknown_ids"]))
+    if result["uncited_ids"]:
+        _warn("Uncited fact leads: " + ", ".join(result["uncited_ids"]))
+    _warn("Independent factual and firsthand-claim editorial review is required.")
+
+
 def cmd_generate(args):
     from pennovia.voice.analyzer import VoiceProfile
     from pennovia.voice.generator import OllamaGeneration, generate
@@ -153,10 +195,16 @@ def cmd_generate(args):
     _ok(f"{profile.author_name} — {profile.text_count} texts, {profile.total_words:,} words")
     _step(2, 3, f"Generating '{args.topic}' ({args.type}) via {args.backend}...")
     t0 = time.time()
+    fact_raw, fact_packet = _load_fact_packet(
+        getattr(args, "facts_file", None),
+        verify=getattr(args, "verify_facts", False),
+    )
     try:
         kwargs = {}
         if getattr(args, "model", None):
             kwargs["model"] = args.model
+        if getattr(args, "facts_file", None):
+            kwargs["fact_packet"] = fact_raw
         generated = generate(
             profile, args.type, args.topic,
             backend=args.backend, return_metadata=True, **kwargs
@@ -178,7 +226,10 @@ def cmd_generate(args):
         _warn("Ollama did not confirm generation completion; inspect the draft.")
     if result.issues:
         _warn(f"Issues: {', '.join(result.issues)}")
-    write_private_text(out, content, overwrite=getattr(args, "overwrite", False))
+    _warn_fact_review(fact_packet, content)
+    exported_content = (fact_packet.append_source_notes(content)
+                        if fact_packet else content)
+    write_private_text(out, exported_content, overwrite=getattr(args, "overwrite", False))
     _ok(f"Saved: {out}")
     if getattr(args, "verbose", False):
         report = result.report()
@@ -286,10 +337,16 @@ def cmd_run(args):
     _ok(profile.summary().split("\n")[0])
     _step(3, STEPS, f"Generating '{args.topic}' ({args.type or 'travel_blog'}) via {args.backend or 'auto'}...")
     t0 = time.time()
+    fact_raw, fact_packet = _load_fact_packet(
+        getattr(args, "facts_file", None),
+        verify=getattr(args, "verify_facts", False),
+    )
     try:
         kwargs = {}
         if getattr(args, "model", None):
             kwargs["model"] = args.model
+        if getattr(args, "facts_file", None):
+            kwargs["fact_packet"] = fact_raw
         generation = generate(
             profile, args.type or "travel_blog", args.topic,
             backend=args.backend or "auto", return_metadata=True, **kwargs
@@ -311,6 +368,7 @@ def cmd_run(args):
         _warn("Ollama completion unconfirmed: editorial review required.")
     if result.issues:
         _warn(f"Issues: {', '.join(result.issues)}")
+    _warn_fact_review(fact_packet, content)
     try:
         _publication_preflight(
             publish=getattr(args, "publish", False),
@@ -322,7 +380,10 @@ def cmd_run(args):
         profile.save(args.save_profile, overwrite=getattr(args, "overwrite", False))
         _ok(f"Profile: {args.save_profile}")
     _step(5, STEPS, "Exporting...")
-    _export_all(content, args.topic, fmts, dest, publish=getattr(args, "publish", False))
+    exported_content = (fact_packet.append_source_notes(content)
+                        if fact_packet else content)
+    _export_all(exported_content, args.topic, fmts, dest,
+                publish=getattr(args, "publish", False))
     print(f"\nDone. Score: {result.total_score}/100 | {len(content.split()):,} words")
 
 
@@ -367,6 +428,9 @@ def main():
     p_g.add_argument("--backend", default=os.environ.get("PENNOVIA_BACKEND", "auto"),
                      choices=["auto","openai","anthropic","openrouter","ollama","codex"])
     p_g.add_argument("--model", help="Override model (e.g. gpt-4o, claude-opus-4-8)")
+    p_g.add_argument("--facts-file", help="Optional JSON with explicitly supplied source facts")
+    p_g.add_argument("--verify-facts", action="store_true",
+                     help="Find source excerpts with the safe public HTTPS reader before generation")
     p_g.add_argument("--out", default="output.txt")
     p_g.add_argument("--overwrite", action="store_true", help="Replace existing draft output")
     p_g.add_argument("--verbose", action="store_true")
@@ -394,6 +458,9 @@ def main():
     p_r.add_argument("--backend", default=os.environ.get("PENNOVIA_BACKEND", "auto"),
                      choices=["auto","openai","anthropic","openrouter","ollama","codex"])
     p_r.add_argument("--model")
+    p_r.add_argument("--facts-file", help="Optional JSON with explicitly supplied source facts")
+    p_r.add_argument("--verify-facts", action="store_true",
+                     help="Find source excerpts with the safe public HTTPS reader before generation")
     p_r.add_argument("--format", default=None,
                      help="html, pdf, txt; defaults to html,txt locally or html for WordPress")
     p_r.add_argument("--dest", default="downloads",

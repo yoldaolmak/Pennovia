@@ -110,6 +110,12 @@
           <div class="section-heading"><div><h2 id="draft-title">A fresh page. A familiar voice.</h2><p>Your profile guides the model; you remain the editor.</p></div></div>
           <div class="draft-fields">
             <div class="field-topic"><label for="topic">What are we writing about?</label><input id="topic" type="text" maxlength="500" placeholder="e.g. A weekend in Lisbon" autocomplete="off"></div>
+            <details class="field-topic">
+              <summary>Optional: provide factual-source evidence</summary>
+              <label for="fact-packet">Fact packet (JSON: facts with claim, source_url and source_excerpt)</label>
+              <textarea id="fact-packet" rows="4" maxlength="18000" spellcheck="false" placeholder='{"facts":[{"claim":"A source-supported fact","source_url":"https://example.org/article","source_excerpt":"A longer matching passage from the source article."}]}'></textarea>
+              <p>Source URLs and excerpts are user supplied, not independently verified. They are separate from your voice profile. Review facts before publishing.</p>
+            </details>
             <div><label for="content-type">Format</label><select id="content-type"><option value="travel_blog">Travel blog</option><option value="travel_guide">Travel guide</option><option value="magazine">Magazine article</option><option value="news">News</option><option value="story">Story</option><option value="column">Column</option></select></div>
             <div><label for="backend">Model provider</label><select id="backend"><option value="ollama">Ollama · local</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="openrouter">OpenRouter</option><option value="codex">Codex CLI</option></select></div>
             <div><label for="model">Model name <span class="soft-label">optional</span></label><input id="model" type="text" maxlength="120" placeholder="Provider default" autocomplete="off"></div>
