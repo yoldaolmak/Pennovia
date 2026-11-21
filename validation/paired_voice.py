@@ -98,12 +98,13 @@ def _fixed_source(url: str) -> tuple[str, str]:
 
 
 def load_cases() -> list[Case]:
-    english, english_hash = _download_source()
+    english, english_hash, english_url = _download_source()
     chapters = select_chapters(english)
     twain = Case(
         "twain-en", "Mark Twain", "en",
         tuple(chapters[name] for name in ("I", "II", "IV")), chapters["III"],
-        ({"url": "https://www.gutenberg.org/ebooks/3176", "sha256": english_hash,
+        ({"url": english_url, "catalog": "https://www.gutenberg.org/ebooks/3176",
+          "sha256": english_hash,
           "license": "Public domain (US); Project Gutenberg #3176",
           "train": ["I", "II", "IV"], "holdout": "III"},),
     )
