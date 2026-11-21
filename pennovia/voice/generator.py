@@ -321,6 +321,7 @@ def generate_openrouter(profile: VoiceProfile, content_type: str, topic: str,
 
 def generate(profile: VoiceProfile, content_type: str, topic: str,
              backend: str = "auto", return_metadata: bool = False,
+             *, fact_packet: dict | str | None = None,
              **kwargs) -> str | OllamaGeneration:
     """
     backend: "auto" | "openai" | "anthropic" | "openrouter" | "ollama" | "codex"
@@ -328,6 +329,10 @@ def generate(profile: VoiceProfile, content_type: str, topic: str,
     anthropic → openrouter → openai → ollama. Never retry with another
     provider after a failure; implicit cross-provider transfer is unsafe.
     """
+    if fact_packet is not None:
+        from .facts import FactPacket
+        packet = FactPacket.from_data(fact_packet)
+        topic = topic + packet.prompt_context()
     if backend == "auto":
         if os.environ.get("ANTHROPIC_API_KEY"):
             return generate_anthropic(profile, content_type, topic, **kwargs)
