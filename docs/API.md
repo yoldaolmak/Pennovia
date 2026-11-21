@@ -134,7 +134,7 @@ result.transition_match  # int 0–20
 result.style_match    # int 0–20
 result.no_ai_cliches  # int 0–20
 result.issues         # list[str]
-result.passed()       # bool: score >= 70, at least 200 words, no recognised unresolved placeholders; not calibrated
+result.passed()       # bool: heuristic >= 70, 200+ words, no known placeholder/language/strong-repetition failure; not factual verification
 result.report()       # str — formatted report
 ```
 
