@@ -157,6 +157,7 @@ def test_neutral_optional_receipt_exposes_model_length_cutoff(monkeypatch):
                 raise_for_status=lambda: None,
                 json=lambda: {
                     "message": {"content": "A usable but unfinished text"},
+                    "done": True,
                     "done_reason": "length",
                     "eval_count": paired.MAX_TOKENS,
                 },
