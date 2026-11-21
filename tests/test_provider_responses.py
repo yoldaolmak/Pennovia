@@ -148,3 +148,36 @@ def test_auto_does_not_hide_programming_errors_as_missing_backend(monkeypatch):
     monkeypatch.setattr(generator, "generate_ollama", raise_unexpected)
     with pytest.raises(TypeError, match="Unexpected programming error"):
         generator.generate(PROFILE, "story", "Topic", backend="auto")
+
+
+def test_ollama_optional_token_budget_is_bounded_and_sent_to_local_model(monkeypatch):
+    for invalid in (0, 63, 8193, -1, True, 64.5, "640"):
+        with pytest.raises(ValueError, match="max_tokens"):
+            generator.generate_ollama(PROFILE, "story", "Topic", max_tokens=invalid)
+
+    class FakeRequestError(Exception):
+        pass
+
+    class Session:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def post(self, url, **kwargs):
+            assert self.trust_env is False
+            assert url == "http://127.0.0.1:11434/api/chat"
+            assert kwargs["json"]["options"] == {"num_predict": 640}
+            return SimpleNamespace(
+                raise_for_status=lambda: None,
+                json=lambda: {"message": {"content": "A complete local draft."}},
+            )
+
+    monkeypatch.setitem(
+        sys.modules, "requests",
+        SimpleNamespace(Session=Session, RequestException=FakeRequestError),
+    )
+    result = generator.generate_ollama(PROFILE, "story", "Topic", max_tokens=640)
+    assert result == "A complete local draft."
+
