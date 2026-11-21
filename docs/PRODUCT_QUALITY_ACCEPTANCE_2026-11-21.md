@@ -28,6 +28,15 @@ Both English pairs are eligible on language and length, but they are **not** bli
 
 In the archived prose, the Turkish drafts also contain repeated food/travel phrases and broken syntax. Our inspection is *not blinded*, so it cannot replace the independent A/B review. The benchmark's old numeric win indicator must never override comparison validity; the follow-up quality code makes invalid outcomes explicitly ineligible.
 
+## Repeated-model findings and failed localization hypothesis
+
+The first table is **one stochastic run**, not a replicated superiority result. Later independent actual-model trials using the same `qwen2.5:1.5b` family contradicted a stable Pennovia advantage:
+
+- [Run #44906224404](https://github.com/yoldaolmak/Pennovia/actions/runs/44906224404), accepted in merged [PR #51](https://github.com/yoldaolmak/Pennovia/pull/51): Twain EN #1 neutral closer; Twain EN #2 Pennovia closer; Seyfettin TR #1 invalid for severe repetition and length; Seyfettin TR #2 structurally eligible but neutral closer. The Turkish texts contained broken or incomplete prose even when structurally eligible.
+- [Run #44906957205](https://github.com/yoldaolmak/Pennovia/actions/runs/44906957205), [PR #53](https://github.com/yoldaolmak/Pennovia/pull/53) **closed without merge**: native Turkish genre labels and a Turkish language reminder did not establish usable, coherent Turkish writing. Twain EN #1 neutral closer, Twain EN #2 invalid for a 12-word source-copy span, Seyfettin TR #1 invalid for severe repetition (four-gram share 0.485), Seyfettin TR #2 had a lower Pennovia style-distance but still contained substantial semantic and grammatical failures. The source-copy in an unchanged English arm is an observed stochastic failure, not proof that Turkish localization caused it.
+
+Thus neither **2/2 English improvement**, nor **reliable Turkish drafting**, nor overall human editorial quality is established. PR #51's quality integrity screen remains merged to main at `2b668aaf957e13e42d73ebb50acc6164d058b371`, whose postmerge [CI #44906774667](https://github.com/yoldaolmak/Pennovia/actions/runs/44906774667) passed all six jobs. Prompt-only localization was intentionally rejected rather than shipped on a green CI result. Both runs keep downloadable source hashes, real model outputs and blank blinded-review sheets; *no blind editorial review was performed*.
+
 ## New quality safety work
 
 - Recognizable unresolved factual markers fail an otherwise high scoring review; a high number cannot certify a finished travel guide.
@@ -37,9 +46,10 @@ In the archived prose, the Turkish drafts also contain repeated food/travel phra
 
 ## Remaining hard acceptance conditions
 
-1. **Author voice, #45:** obtain a sufficiently powered bilingual, multilingual-genre experiment; include actual blind human reviewer judgments and adverse cases. The 2/2 eligible English observations do not establish product superiority.
+1. **Author voice, #45:** obtain a sufficiently powered bilingual, multilingual-genre experiment; include actual blind human reviewer judgments and adverse cases. The 2/2 English observation from the first run did not reproduce consistently and does not establish product superiority.
 2. **Grounded claims, #48:** explicit factual and firsthand-evidence inputs, claim-level source/readback checks, a safe editorial review surface, and fail-closed publication behavior for unverified claims. A clean stylistic audit is not factual verification.
 3. **Repository enforcement, #46:** main is not protected and no required exact-head checks/ruleset is configured. Existing CI is successful but advisory until governance changes are made.
 4. **Real remote exports, #49:** WordPress and Google Drive need authorized *non-production* creation/readback proof, including indeterminate-network-outcome tests. Mock tests cannot certify a remote write.
+5. **Completion and fluency, #52:** preserve real model finish metadata, detect token-limited fragments and independently evaluate semantic coherence and natural Turkish. A mechanically eligible style comparison cannot certify a complete or readable draft.
 
 **Release interpretation:** The author can inspect/edit drafts and must retain editorial authority. Neither an offline test run, a numeric style score, nor this limited local-model trial authorizes unattended publication or a full-product-quality claim.
