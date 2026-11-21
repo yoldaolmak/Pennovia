@@ -4,6 +4,17 @@ Date: 21 November 2026. Scope: Core, CLI, Studio, publishing boundaries and real
 
 **Decision: FULL PRODUCT ACCEPTANCE NOT GRANTED.** This is an evidence-based release decision, not an assertion that the existing software is unusable.
 
+## Latest exact-head checkpoint — final 21 November review
+
+- Latest reviewed main: `24f756d3d567efcee882f2cd46ff681106b5aa76`, after PRs [#54](https://github.com/yoldaolmak/Pennovia/pull/54) (persistent runner caches and bounded real-model smoke), [#57](https://github.com/yoldaolmak/Pennovia/pull/57) (default-branch cache seeding), and [#56](https://github.com/yoldaolmak/Pennovia/pull/56) (actual Ollama completion receipts, Studio/CLI warning and comparable experiment).
+- Its [postmerge exact-head CI run #44909365422](https://github.com/yoldaolmak/Pennovia/actions/runs/44909365422) succeeded: all 6 jobs (Python 3.10/3.11/3.12 + Ruff, real Chromium Studio, wheel installation, container smoke); Python 3.11 reported **315 passed, 2 skipped, 84.36% coverage**. Static correctness passed. No open PR remained at this checkpoint.
+- Main's [model cache seed run #44909214193](https://github.com/yoldaolmak/Pennovia/actions/runs/44909214193) completed and saved `Linux-pennovia-ollama-qwen25-15b-v1`. Versioned Chromium and pip caches also produced verified cache hits. These are real cache operation receipts, **not** a measured end-to-end speedup. Historical main CI was approximately 54 seconds; latest main CI approximately 57 seconds. Avoid a percentage speedup claim.
+- The [actual local-model run #44908822086](https://github.com/yoldaolmak/Pennovia/actions/runs/44908822086) was successful as a workflow and recorded genuine model `done`, `done_reason` and token usage for each arm. **All 4 Pennovia-guided drafts stopped at the 640-token limit (`done_reason=length`)**, so **0/4 paired cases were eligible** for a superiority claim. Earlier favorable style-distance numbers do not constitute acceptable writer-voice results.
+- The earlier native-Turkish prompt pilot [PR #53](https://github.com/yoldaolmak/Pennovia/pull/53) was **closed without merging** after real outputs remained incoherent or repetitive; do not call it an accepted product capability.
+- Branch protection remains absent (`main.protected=false`). GitHub's connected application can inspect but cannot administer required-check rules; passing CI is therefore **not technically merge-enforced**.
+
+**Overall product decision: NOT ACCEPTED.** The CI/pipeline and objective detection improvements passed their engineering checks. Pennovia has **not** demonstrated reliable author-voice fidelity or publishable Turkish prose, source-grounded factual accuracy, independently verified remote export outcomes, or enforceable branch governance. Do not turn this explicit failure into an acceptance badge.
+
 ## Verified delivery baseline
 
 - Main at the start of this review: `84d53ca53c3f33e73b04bef20ba546de7a252800`.
@@ -50,6 +61,7 @@ Thus neither **2/2 English improvement**, nor **reliable Turkish drafting**, nor
 2. **Grounded claims, #48:** explicit factual and firsthand-evidence inputs, claim-level source/readback checks, a safe editorial review surface, and fail-closed publication behavior for unverified claims. A clean stylistic audit is not factual verification.
 3. **Repository enforcement, #46:** main is not protected and no required exact-head checks/ruleset is configured. Existing CI is successful but advisory until governance changes are made.
 4. **Real remote exports, #49:** WordPress and Google Drive need authorized *non-production* creation/readback proof, including indeterminate-network-outcome tests. Mock tests cannot certify a remote write.
+5. **Generation completion and coherence, #52:** The objective model receipt and cutoff handling are merged; authentic testing proved 4/4 guided texts ended at the token limit. Independent semantic readability and natural Turkish still need credible evidence, with stronger permitted local modeling or an explicit feature limitation.
 5. **Completion and fluency, #52:** preserve real model finish metadata, detect token-limited fragments and independently evaluate semantic coherence and natural Turkish. A mechanically eligible style comparison cannot certify a complete or readable draft.
 
 **Release interpretation:** The author can inspect/edit drafts and must retain editorial authority. Neither an offline test run, a numeric style score, nor this limited local-model trial authorizes unattended publication or a full-product-quality claim.
