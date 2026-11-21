@@ -155,3 +155,78 @@ def test_source_leads_are_not_implicitly_read_from_voice_samples():
     assert "I saw a nonexistent airport" in user
     assert "I saw a nonexistent airport" not in system
     assert "I saw a nonexistent airport" not in empty.prompt_context()
+
+
+def test_actual_source_excerpt_check_is_distinct_from_claim_truth():
+    packet = FactPacket.from_data(FACTS)
+    seen = []
+
+    def source_reader(url):
+        seen.append(url)
+        return (
+            "An unrelated header. THE HARBOR SERVICE DESCRIBES A FERRY "
+            "OPERATING FROM THIS FICTIONAL ISLAND AND REMINDS TRAVELERS "
+            "TO CONSULT THE OPERATOR. End."
+        )
+
+    results = packet.check_source_excerpts(fetch=source_reader)
+    assert seen == [FACTS["facts"][0]["source_url"]]
+    assert results[0]["source_excerpt_found"] is True
+    assert len(results[0]["source_text_sha256"]) == 64
+    assert results[0]["claim_truth_verified"] is False
+
+
+def test_source_excerpt_mismatch_and_fetch_error_do_not_claim_success():
+    packet = FactPacket.from_data(FACTS)
+    for fetcher in (
+        lambda url: "A totally unrelated page with an invented claim.",
+        lambda url: (_ for _ in ()).throw(ValueError("Synthetic article not found")),
+    ):
+        report = packet.check_source_excerpts(fetch=fetcher)
+        assert not report[0]["source_excerpt_found"]
+        assert report[0]["claim_truth_verified"] is False
+
+
+def test_source_excerpt_lookup_reuses_single_request_for_duplicate_urls():
+    two = {"facts": [FACTS["facts"][0], {
+        **FACTS["facts"][0],
+        "claim": "A fictional route should be checked at the harbor.",
+    }]}
+    packet = FactPacket.from_data(two)
+    calls = []
+    def read(url):
+        calls.append(url)
+        return FACTS["facts"][0]["source_excerpt"]
+    results = packet.check_source_excerpts(fetch=read)
+    assert len(calls) == 1
+    assert [x["source_excerpt_found"] for x in results] == [True, True]
+
+
+def test_cli_verify_facts_refuses_model_call_when_excerpt_not_matched(
+    monkeypatch, tmp_path, capsys,
+):
+    from pennovia.voice.analyzer import analyze
+    sample = ("I returned to a quiet fictional harbor after the rain. "
+              "The road remained open and the afternoon passed gently. ") * 24
+    profile = analyze([sample], language="en")
+    path = tmp_path / "voice.json"
+    profile.save(path)
+    facts = tmp_path / "facts.json"
+    facts.write_text(json.dumps(FACTS), encoding="utf-8")
+    monkeypatch.setattr(
+        FactPacket, "check_source_excerpts",
+        lambda self: [{"source_excerpt_found": False}],
+    )
+    monkeypatch.setattr(
+        generator, "generate",
+        lambda *args, **kwargs: pytest.fail("unverified source reached the model"),
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "pennovia", "generate", "--profile", str(path), "--topic", "A port",
+        "--backend", "ollama", "--facts-file", str(facts),
+        "--verify-facts", "--out", str(tmp_path / "draft.txt"),
+    ])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 1
+    assert "no model call was made" in capsys.readouterr().err
