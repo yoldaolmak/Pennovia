@@ -100,6 +100,22 @@ class FactPacket:
             ))
         return cls(tuple(facts))
 
+    def append_source_notes(self, draft: str) -> str:
+        """Keep source IDs resolvable in exports, without implying verification.
+
+        Never append source excerpts: the author retains the original text
+        and avoids republishing possibly copyrighted passages.
+        """
+        if not isinstance(draft, str) or not draft.strip():
+            raise ValueError("Cannot attach source notes to an empty draft")
+        header = "Source leads supplied by editor (unverified)"
+        if header in draft:
+            return draft  # A previously exported draft must not double its notes.
+        notes = [header]
+        for fact in self.facts:
+            notes.append(f"[{fact.id}] {fact.claim} — {fact.source_url}")
+        return draft.rstrip() + "\n\n" + "\n\n".join(notes)
+
     def prompt_context(self) -> str:
         """Render as data in a lower-priority user turn, never as instructions."""
         records = [
