@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: [self-hosted, Linux, X64, pennovia-isolated-ci]
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-latest' || 'pennovia-isolated-ci' }}
     strategy:
       fail-fast: false
       matrix:
@@ -63,7 +63,7 @@ jobs:
           docker run --rm pennovia-ci demo
 
   wheel-smoke:
-    runs-on: [self-hosted, Linux, X64, pennovia-isolated-ci]
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-latest' || 'pennovia-isolated-ci' }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
