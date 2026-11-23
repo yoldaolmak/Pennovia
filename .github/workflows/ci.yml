@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, pennovia-isolated-ci]
     strategy:
       fail-fast: false
       matrix:
@@ -62,7 +62,7 @@ jobs:
           docker run --rm pennovia-ci demo
 
   wheel-smoke:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, pennovia-isolated-ci]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
