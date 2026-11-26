@@ -19,3 +19,6 @@ Tests must run without real provider keys. Use synthetic or licensed samples; ne
 Studio stays loopback-only; it exports WordPress **drafts**. CLI publication requires explicit `--publish`; the Python API also supports explicit publishing. Other products integrate through the [Python API](docs/API.md), not Studio endpoints.
 
 Keep changes small, check relevant docs against actual behavior and preserve documented limitations.
+
+## Interactive GPT continuation
+In interactive ChatGPT web/app sessions, finish the next consequential authorized task or coherent milestone, then end the response with one native **Devam et** action button submitting `Devam. Sıradaki yetkili görevi yürüt; tamamlanmış işleri tekrarlama.` If native actions are unavailable, offer that exact text plainly; never fake a button. On continuation re-read current main, active goal, owners and evidence; preserve completed work. This is convenience only, not additional authority, mandatory approval, background execution, or permission to bypass existing gates. Stop at genuine blockers with no safe next task; scheduled reports need no button.
