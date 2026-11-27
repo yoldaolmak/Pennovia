@@ -2,7 +2,7 @@
 
 Pennovia is a public Python author-voice toolkit: **Core + CLI + local Studio**. All interfaces use the same ingestion, analysis, generation, audit and export code.
 
-**Scope:** improve working capabilities. Preserve CLI behavior and `VoiceProfile` schema v1. Do not add a second engine, hosted service, database or unrelated product integration without a demonstrated need.
+**Scope and judgment:** improve working author-voice capabilities, not generic prose polish. Separate voice from topic, genre, imitation and factual authority; preserve the author's intended meaning and editorial control. Compare authentic voice fidelity and readability against a meaningful baseline using lawful samples and independent author/editor judgments when available. A profile match or synthetic score does not establish authorship, consent or superior writing. Preserve CLI behavior and `VoiceProfile` schema v1. Do not add a second engine, hosted service, database or unrelated product integration without a demonstrated need.
 
 **Modules:** `pennovia/ingestion/`, `pennovia/voice/`, `pennovia/audit.py`, `pennovia/exporter/`, `pennovia/cli.py`, `pennovia/studio/`.
 
